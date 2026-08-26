@@ -20,16 +20,18 @@ const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 
+// Static frontend assets first
+app.use(express.static(PUBLIC_DIR, { extensions: ['html', 'js'] }));
+
 // API routes
 registerAuthRoutes(app);
 registerRoutes(app);
 
-// Static frontend
-app.use(express.static(PUBLIC_DIR));
-
-// SPA fallback — anything not an API/upload route serves index.html
+// SPA fallback — only serve index.html for navigation requests, not missing assets/APIs
 app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
+  if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || path.extname(req.path)) {
+    return next();
+  }
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
