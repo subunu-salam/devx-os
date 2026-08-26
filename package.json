@@ -1,0 +1,23 @@
+{
+  "name": "devx-os",
+  "version": "1.0.0",
+  "description": "DevX OS — internal business management platform for DevX Technologies LLC (Meetings, Expenses, Ledger, Invoices, Leads, Reports).",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "seed": "node server/seed.js",
+    "reset": "node server/seed.js --reset"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.3.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1"
+  }
+}

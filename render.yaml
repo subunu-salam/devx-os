@@ -1,0 +1,21 @@
+# Render Blueprint — deploy DevX OS with one click.
+# In Render: New + → Blueprint → connect this repo. It reads this file automatically.
+services:
+  - type: web
+    name: devx-os
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true      # Render generates a strong secret for you
+      - key: DATA_DIR
+        value: /var/data         # SQLite DB + uploaded receipts live here
+    disk:
+      name: devx-data
+      mountPath: /var/data       # persistent disk so data survives redeploys
+      sizeGB: 1
