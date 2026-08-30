@@ -58,15 +58,40 @@ export default async function leads(view, ctx) {
         { label: 'Status', sort: (r) => r.status, render: (r) => badge(r.status) },
         { label: 'Next action', render: (r) => escapeHtml(r.next_action || '—') },
         { label: 'Source', render: (r) => `<span class="muted">${escapeHtml(r.source || '—')}</span>` },
-        { label: '', align: 'right', render: () => rowActionButtons(isAdmin) },
+        { label: '', align: 'right', render: (r) => `<div class="row-actions">
+            ${r.converted_contact_id ? `<span class="badge b-green" title="Converted">${icon('check')}</span>` : `<button class="btn btn-ghost btn-icon btn-sm" data-conv title="Convert to customer" style="color:var(--green)">${icon('users')}</button>`}
+            <button class="btn btn-ghost btn-icon btn-sm" data-edit title="Edit">${icon('edit')}</button>
+            ${isAdmin ? `<button class="btn btn-ghost btn-icon btn-sm" data-del title="Delete" style="color:var(--red)">${icon('trash')}</button>` : ''}
+          </div>` },
       ],
       onRowsRendered: (tbody) => tbody.querySelectorAll('tr').forEach((tr) => {
         const row = rows.find((r) => r.id == tr.dataset.id);
         tr.querySelector('[data-edit]')?.addEventListener('click', () => openForm(row));
+        tr.querySelector('[data-conv]')?.addEventListener('click', () => convertLead(row));
         tr.querySelector('[data-del]')?.addEventListener('click', async () => {
           if (await confirmDialog(`Delete lead “${row.name}”?`)) { await del('/api/leads/' + row.id); rows = rows.filter((r) => r.id !== row.id); toast('Lead deleted', 'ok'); renderTab(); }
         });
       }),
+    });
+  }
+
+  function convertLead(row) {
+    if (row.converted_contact_id) return toast('Already converted to a customer', 'ok');
+    openModal({
+      title: `Convert “${escapeHtml(row.name)}” to customer`,
+      body: `<p style="color:var(--muted)">This creates a <strong>Customer</strong> in your books and a <strong>CRM Contact</strong>, and marks the lead as Won.</p>
+        <div class="field" style="margin-top:12px"><label><input type="checkbox" id="mkDeal" checked style="width:auto;margin-right:6px">Also create a Won deal</label></div>
+        <div class="field"><label>Deal amount (AED)</label><input class="input" type="number" step="0.01" id="dealAmt" value="0"></div>`,
+      footer: `<button class="btn btn-outline" data-close>Cancel</button><button class="btn btn-primary" data-yes>${icon('users')} Convert</button>`,
+      onMount: (back, close) => {
+        back.querySelector('[data-yes]').onclick = async () => {
+          try {
+            await post(`/api/leads/${row.id}/convert`, { create_deal: back.querySelector('#mkDeal').checked, amount: Number(back.querySelector('#dealAmt').value || 0), owner: ctx.user.full_name });
+            const fresh = rows.find((r) => r.id === row.id); if (fresh) { fresh.status = 'Won'; fresh.converted_contact_id = -1; }
+            toast('Lead converted to customer', 'ok'); close(); renderTab();
+          } catch (e) { toast(e.message, 'err'); }
+        };
+      },
     });
   }
 

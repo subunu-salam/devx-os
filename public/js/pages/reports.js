@@ -3,10 +3,15 @@ import { pageHead } from '../ui.js';
 
 const DATASETS = {
   meetings: { label: 'Meetings', url: '/api/meetings', cols: ['meeting_date', 'client_name', 'business_category', 'meeting_type', 'meeting_mode', 'confirmed_by', 'status', 'remarks'] },
-  expenses: { label: 'Expenses', url: '/api/expenses', cols: ['expense_date', 'person', 'category', 'other_details', 'amount', 'description'] },
-  ledger: { label: 'Ledger', url: '/api/ledger', cols: ['entry_date', 'type', 'category', 'description', 'party', 'method', 'amount'] },
-  invoices: { label: 'Invoices', url: '/api/invoices', cols: ['invoice_number', 'client_name', 'issue_date', 'due_date', 'status', 'total'] },
   leads: { label: 'Leads', url: '/api/leads', cols: ['name', 'business_category', 'status', 'source', 'next_action'] },
+  deals: { label: 'Deals', url: '/api/deals', cols: ['name', 'account_name', 'contact_name', 'amount', 'stage', 'probability', 'closing_date', 'owner'] },
+  tasks: { label: 'Tasks', url: '/api/tasks', cols: ['subject', 'related_to', 'task_type', 'due_date', 'priority', 'status', 'owner'] },
+  customers: { label: 'Customers', url: '/api/contacts', cols: ['display_name', 'company_name', 'email', 'phone', 'trn', 'payment_terms'] },
+  invoices: { label: 'Invoices', url: '/api/invoices', cols: ['invoice_number', 'client_name', 'issue_date', 'due_date', 'status', 'total'] },
+  estimates: { label: 'Estimates', url: '/api/estimates', cols: ['estimate_number', 'client_name', 'estimate_date', 'expiry_date', 'status', 'total'] },
+  bills: { label: 'Bills', url: '/api/bills', cols: ['bill_number', 'vendor_name', 'bill_date', 'due_date', 'status', 'total'] },
+  payments: { label: 'Payments', url: '/api/payments', cols: ['payment_number', 'payment_type', 'party_name', 'payment_date', 'mode', 'amount'] },
+  expenses: { label: 'Expenses', url: '/api/expenses', cols: ['expense_date', 'person', 'category', 'other_details', 'amount', 'description'] },
 };
 
 export default async function reports(view) {

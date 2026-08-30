@@ -2,6 +2,8 @@
 // Idempotent: only seeds when the users table is empty. Run `npm run reset` to wipe + reseed.
 import bcrypt from 'bcryptjs';
 import db from './db.js';
+import './schema.js';
+import { seedAccounting } from './seed_accounting.js';
 
 const DEFAULT_PASSWORD = 'DevX@2026';
 
@@ -112,6 +114,18 @@ export function seedAll() {
   for (const ld of LEADS) insLead.run(...ld, founder);
 
   console.log(`Seeded: ${USERS.length} users, ${MEETINGS.length} meetings, ${EXPENSES.length} expenses, ${LEDGER.length} ledger entries, ${LEADS.length} leads.`);
+  seedAccounting(founder);
+
+  // Seed a little activity history so the audit log isn't empty on first run.
+  const insAct = db.prepare(`INSERT INTO activity_logs (user_id, user_name, action, entity_type, entity_id, description, created_at) VALUES (?,?,?,?,?,?,?)`);
+  const HISTORY = [
+    ['create', 'system', null, 'Migrated 6 meetings from the Excel tracker', '2026-07-01 09:05:00'],
+    ['create', 'expense', null, 'Migrated 17 expenses with receipts from the Excel sheet', '2026-07-01 09:06:00'],
+    ['create', 'ledger', null, 'Recorded founder investment AED 250,000 (opening journal)', '2026-07-01 09:07:00'],
+    ['create', 'lead', null, 'Migrated 27 leads from the outreach tracker', '2026-07-01 09:08:00'],
+    ['create', 'account', null, 'Set up the chart of accounts (Zoho Books structure)', '2026-07-01 09:10:00'],
+  ];
+  for (const h of HISTORY) insAct.run(founder, 'Subunu', h[0], h[1], h[2], h[3], h[4]);
 }
 
 export function ensureSeed() {
@@ -119,6 +133,11 @@ export function ensureSeed() {
   if (count === 0) {
     console.log('Empty database — seeding initial data...');
     seedAll();
+  } else {
+    // Backfill accounting + CRM for databases created before these modules existed.
+    const founder = db.prepare("SELECT id FROM users WHERE lower(email)='subinu@devxpert.ae'").get()?.id
+      || db.prepare('SELECT id FROM users ORDER BY id LIMIT 1').get()?.id;
+    try { seedAccounting(founder); } catch (e) { console.error('accounting backfill failed:', e.message); }
   }
 }
 
@@ -126,8 +145,12 @@ export function ensureSeed() {
 const isMain = process.argv[1] && process.argv[1].endsWith('seed.js');
 if (isMain) {
   if (process.argv.includes('--reset')) {
-    for (const t of ['activity_logs', 'invoice_items', 'invoices', 'leads', 'ledger_entries', 'expenses', 'meetings', 'users']) {
-      db.prepare(`DELETE FROM ${t}`).run();
+    for (const t of ['activity_logs', 'journal_lines', 'journals', 'accounts', 'invoice_items', 'invoices',
+                     'estimate_items', 'estimates', 'bill_items', 'bills', 'payments',
+                     'credit_note_items', 'credit_notes', 'items', 'contacts',
+                     'crm_accounts', 'crm_contacts', 'deals', 'tasks',
+                     'leads', 'ledger_entries', 'expenses', 'meetings', 'users']) {
+      try { db.prepare(`DELETE FROM ${t}`).run(); } catch {}
     }
     console.log('Database wiped.');
     seedAll();

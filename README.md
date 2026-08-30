@@ -1,10 +1,48 @@
-# DevX OS — Internal Business Management Platform
+# DevX OS — Business Management Platform (Zoho Books + Zoho CRM style)
 
-A self-hosted web app for **DevX Technologies LLC** — Meetings, Expenses, Finance Ledger,
-Invoices, Leads, Reports, and an Activity/Audit log, with secure logins for the team.
+A self-hosted web app for **DevX Technologies LLC** with a full **double-entry accounting core
+modelled on Zoho Books** and a **CRM modelled on Zoho CRM** — plus the original Meetings, Expenses,
+Leads, Reports and Activity/Audit log. Secure logins for the team, one command to run.
 
 Built as a single Node.js app: **Express backend + SQLite database + a fast vanilla-JS frontend.**
 No external services required — it runs with one command locally and deploys to Render in minutes.
+
+## What's inside (Zoho parity)
+
+**Accounting — Zoho Books style (real double-entry), matching the Zoho sidebar:**
+- **Chart of Accounts** — Assets, Liabilities, Equity, Income, Expenses (UAE-ready, VAT accounts).
+- **Customers & Vendors**, **Items** (products/services with VAT + income accounts).
+- **Sales:** Estimates/Quotes, **Sales Orders**, **Delivery Challans**, Invoices,
+  **Recurring Invoices** (generate on demand), Payments Received, Credit Notes — with
+  one-click **convert** (estimate/SO/challan → invoice).
+- **Purchases:** Vendors, Expenses, **Purchase Orders** (→ bill), Bills, Payments Made, **Vendor Credits**.
+- **Time Tracking:** Projects + Timesheet (billable/non-billable hours).
+- **Banking:** cash/bank accounts with balances, deposits, withdrawals, and transfers.
+- **Accountant:** Manual Journals (balanced editor), Chart of Accounts (with Inventory Asset, COGS
+  sub-accounts, and Other-Expense accounts), **Bulk Update**, and **Transaction Locking** (freeze the
+  books up to a date).
+- **Items** support **inventory tracking** — units, opening stock, stock-on-hand, and low-stock alerts.
+- **Documents:** central file store.
+- **Expense Tracker** kept as-is — now also posts to the ledger automatically.
+- Every document posts a balanced journal, so the books always tie out.
+
+**Financial Reports (generated from the ledger):**
+- Profit & Loss, Balance Sheet, Trial Balance, General Ledger,
+  A/R Aging, A/P Aging, VAT Summary (UAE 5%). Print / PDF each one.
+
+**CRM — Zoho CRM style:**
+- **Leads** (kept, original flow) — a won lead **converts to a Customer + CRM Contact + Deal** in one click,
+  **Deals** pipeline (stages, probability, weighted value),
+  **Contacts**, **Accounts** (companies), **Tasks**, and the **Meeting Tracker** (kept as-is).
+
+> ⚠️ **Data persistence on Render:** the SQLite database lives on a disk. On Render's **free** plan the
+> filesystem is wiped on every restart/redeploy/sleep, so all data (including activity history) resets.
+> `render.yaml` is set to the **starter** (paid) plan with a 1 GB persistent disk at `/var/data` so your
+> data survives. If you must stay on free, expect the database to reset — that is a Render limitation,
+> not a bug in the app.
+
+**Everything else:** branded dashboard, Export Center (CSV/PDF for any module), Activity audit log,
+role-based access (admin / accountant / super admin), AED currency throughout.
 
 ---
 
@@ -75,12 +113,16 @@ On Render, attach a **persistent disk** so it survives redeploys — the include
 devx-os/
 ├── server/                 # Express backend
 │   ├── index.js            # entry point
-│   ├── db.js               # SQLite schema
+│   ├── db.js               # core SQLite schema
+│   ├── schema.js           # Books + CRM tables (accounts, journals, bills, deals…)
+│   ├── accounting.js       # double-entry engine + report queries (P&L, BS, TB, aging, VAT)
 │   ├── auth.js             # login / JWT cookie / roles
 │   ├── activity.js         # audit-log helper
 │   ├── crud.js             # reusable CRUD routes
-│   ├── routes.js           # all API endpoints
-│   └── seed.js             # team + migrated Excel data
+│   ├── routes.js           # core API endpoints (+ invoice journal posting)
+│   ├── routes_ext.js       # Books + CRM API endpoints + reports
+│   ├── seed.js             # team + migrated Excel data
+│   └── seed_accounting.js  # chart of accounts + migrates existing data into the ledger
 ├── public/                 # frontend (served by Express)
 │   ├── index.html
 │   ├── css/styles.css

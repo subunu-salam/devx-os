@@ -4,29 +4,91 @@ import { api, get, post, icon, escapeHtml, toast } from './api.js';
 import dashboard from './pages/dashboard.js';
 import meetings from './pages/meetings.js';
 import expenses from './pages/expenses.js';
-import ledger from './pages/ledger.js';
 import invoices from './pages/invoices.js';
 import leads from './pages/leads.js';
 import company from './pages/company.js';
 import reports from './pages/reports.js';
 import activity from './pages/activity.js';
 import settings from './pages/settings.js';
+// Zoho Books modules
+import coa from './pages/accounts.js';
+import customers from './pages/customers.js';
+import vendors from './pages/vendors.js';
+import items from './pages/items.js';
+import estimates from './pages/estimates.js';
+import salesorders from './pages/sales_orders.js';
+import deliverychallans from './pages/delivery_challans.js';
+import recurringinvoices from './pages/recurring_invoices.js';
+import paymentsin from './pages/payments_received.js';
+import paymentsout from './pages/payments_made.js';
+import purchaseorders from './pages/purchase_orders.js';
+import bills from './pages/bills.js';
+import vendorcredits from './pages/vendor_credits.js';
+import creditnotes from './pages/credit_notes.js';
+import journals from './pages/journals.js';
+import banking from './pages/banking.js';
+import transactionlocking from './pages/transaction_locking.js';
+import bulkupdate from './pages/bulk_update.js';
+import financials from './pages/financials.js';
+import documents from './pages/documents.js';
+import projects from './pages/projects.js';
+import timesheet from './pages/timesheet.js';
+// Zoho CRM modules
+import deals from './pages/deals.js';
+import crmcontacts from './pages/crm_contacts.js';
+import crmaccounts from './pages/crm_accounts.js';
+import tasks from './pages/tasks.js';
 
-const PAGES = { dashboard, meetings, expenses, ledger, invoices, leads, company, reports, activity, settings };
+const PAGES = {
+  dashboard, leads, deals, crmcontacts, crmaccounts, meetings, tasks,
+  customers, items, estimates, salesorders, deliverychallans, invoices, recurringinvoices, paymentsin, creditnotes,
+  vendors, expenses, purchaseorders, bills, paymentsout, vendorcredits,
+  projects, timesheet, banking, coa, journals, transactionlocking, bulkupdate, financials, reports, documents,
+  company, activity, settings,
+};
 
 const NAV = [
   { group: 'Overview' },
   { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-  { group: 'Sales' },
-  { key: 'meetings', label: 'Meetings', icon: 'calendar' },
+  { group: 'CRM' },
   { key: 'leads', label: 'Leads', icon: 'leads' },
-  { group: 'Finance' },
-  { key: 'expenses', label: 'Expenses', icon: 'receipt' },
-  { key: 'ledger', label: 'Ledger', icon: 'ledger' },
+  { key: 'deals', label: 'Deals', icon: 'target' },
+  { key: 'crmcontacts', label: 'Contacts', icon: 'users' },
+  { key: 'crmaccounts', label: 'Accounts', icon: 'building' },
+  { key: 'meetings', label: 'Meetings', icon: 'calendar' },
+  { key: 'tasks', label: 'Tasks', icon: 'check2' },
+  { group: 'Sales' },
+  { key: 'customers', label: 'Customers', icon: 'users' },
+  { key: 'items', label: 'Items', icon: 'layers' },
+  { key: 'estimates', label: 'Estimates / Quotes', icon: 'file' },
+  { key: 'salesorders', label: 'Sales Orders', icon: 'file' },
+  { key: 'deliverychallans', label: 'Delivery Challans', icon: 'inbox' },
   { key: 'invoices', label: 'Invoices', icon: 'invoice' },
+  { key: 'recurringinvoices', label: 'Recurring Invoices', icon: 'clock' },
+  { key: 'paymentsin', label: 'Payments Received', icon: 'wallet' },
+  { key: 'creditnotes', label: 'Credit Notes', icon: 'receipt' },
+  { group: 'Purchases' },
+  { key: 'vendors', label: 'Vendors', icon: 'users' },
+  { key: 'expenses', label: 'Expenses', icon: 'receipt' },
+  { key: 'purchaseorders', label: 'Purchase Orders', icon: 'file' },
+  { key: 'bills', label: 'Bills', icon: 'invoice' },
+  { key: 'paymentsout', label: 'Payments Made', icon: 'wallet' },
+  { key: 'vendorcredits', label: 'Vendor Credits', icon: 'receipt' },
+  { group: 'Time Tracking' },
+  { key: 'projects', label: 'Projects', icon: 'layers' },
+  { key: 'timesheet', label: 'Timesheet', icon: 'clock' },
+  { group: 'Accounting' },
+  { key: 'banking', label: 'Banking', icon: 'wallet' },
+  { key: 'coa', label: 'Chart of Accounts', icon: 'ledger' },
+  { key: 'journals', label: 'Manual Journals', icon: 'ledger' },
+  { key: 'bulkupdate', label: 'Bulk Update', icon: 'layers', adminOnly: true },
+  { key: 'transactionlocking', label: 'Transaction Locking', icon: 'lock', adminOnly: true },
+  { group: 'Reports' },
+  { key: 'financials', label: 'Financial Reports', icon: 'report' },
+  { key: 'reports', label: 'Export Center', icon: 'download' },
   { group: 'Company' },
+  { key: 'documents', label: 'Documents', icon: 'file' },
   { key: 'company', label: 'Company', icon: 'building' },
-  { key: 'reports', label: 'Reports', icon: 'report' },
   { group: 'Admin' },
   { key: 'activity', label: 'Activity Logs', icon: 'activity', adminOnly: true },
   { key: 'settings', label: 'Settings', icon: 'settings' },

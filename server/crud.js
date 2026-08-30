@@ -56,6 +56,7 @@ export function crudRouter(app, {
     if (!row) return res.status(404).json({ error: 'Not found' });
     db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(req.params.id);
     logActivity(req.user, 'delete', entity, row.id, `Deleted ${entity} ${label(row)}`);
+    if (afterWrite) afterWrite(row, 'delete');
     res.json({ ok: true });
   });
 }

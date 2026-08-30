@@ -1,11 +1,12 @@
 import { get, post, put, del, icon, badge, fmtAED, fmtDate, escapeHtml, toast, openModal, confirmDialog, optionList } from '../api.js';
 import { pageHead, kpiRow, listView, rowActionButtons } from '../ui.js';
 
-const STATUSES = ['Draft', 'Sent', 'Paid', 'Overdue', 'Cancelled'];
+const STATUSES = ['Draft', 'Sent', 'Partially Paid', 'Paid', 'Overdue', 'Cancelled'];
 
 export default async function invoices(view, ctx) {
   const isAdmin = ctx.user.role === 'admin';
   let rows = await get('/api/invoices');
+  let customers = (await get('/api/contacts').catch(() => [])).filter((c) => c.contact_type === 'customer');
 
   const sumBy = (f) => rows.filter(f).reduce((s, r) => s + Number(r.total || 0), 0);
   view.innerHTML = pageHead({
@@ -68,7 +69,8 @@ export default async function invoices(view, ctx) {
       title: row ? `Edit ${row.invoice_number}` : 'Create invoice', size: 'lg',
       body: `<form id="if">
         <div class="grid-3">
-          <div class="field"><label>Client</label><input class="input" name="client_name" value="${escapeHtml(r.client_name || '')}" required></div>
+          <div class="field"><label>Client</label><input class="input" name="client_name" list="invCustList" value="${escapeHtml(r.client_name || '')}" required>
+            <datalist id="invCustList">${customers.map((c) => `<option value="${escapeHtml(c.display_name)}">`).join('')}</datalist></div>
           <div class="field"><label>Issue date</label><input class="input" type="date" name="issue_date" value="${r.issue_date || new Date().toISOString().slice(0, 10)}"></div>
           <div class="field"><label>Due date</label><input class="input" type="date" name="due_date" value="${r.due_date || ''}"></div>
         </div>

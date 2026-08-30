@@ -14,10 +14,15 @@ export default async function dashboard(view, ctx) {
     actions: `<button class="btn btn-outline" id="qMeet">${icon('calendar')} Schedule Meeting</button>
               <button class="btn btn-primary" id="qExp">${icon('plus')} Add Expense</button>`,
   }) + kpiRow([
+    { label: 'Net profit', value: fmtAED(k.netProfit ?? 0), sub: `Income ${fmtAED(k.credit || 0)} · Exp ${fmtAED(k.debit || 0)}`, icon: 'trending', tone: (k.netProfit ?? 0) >= 0 ? 'green' : 'red' },
+    { label: 'Cash & bank', value: fmtAED(k.cashBank ?? 0), sub: `Net worth ${fmtAED(k.netPosition || 0)}`, icon: 'wallet', tone: 'green' },
+    { label: 'Receivables', value: fmtAED(k.receivables ?? 0), sub: `Payables ${fmtAED(k.payables || 0)}`, icon: 'invoice', tone: 'amber' },
+    { label: 'Pipeline', value: fmtAED(k.pipelineValue ?? 0), sub: `${k.openDeals || 0} open deals`, icon: 'target' },
+  ]) + kpiRow([
     { label: 'Meetings this month', value: k.monthMeetings, sub: `${k.totalMeetings} all time`, icon: 'calendar' },
-    { label: 'Expenses this month', value: fmtAED(k.monthExpenses), sub: `${fmtAED(k.totalExpenses)} all time`, icon: 'wallet', tone: 'amber' },
-    { label: 'Net cash position', value: fmtAED(k.netPosition), sub: 'Credits − debits − expenses', icon: 'trending', tone: k.netPosition >= 0 ? 'green' : 'red' },
-    { label: 'Active leads', value: k.interestedLeads, sub: `${k.leads} total · ${k.wonLeads} won`, icon: 'target' },
+    { label: 'Expenses this month', value: fmtAED(k.monthExpenses), sub: `${fmtAED(k.totalExpenses)} all time`, icon: 'receipt', tone: 'amber' },
+    { label: 'VAT payable', value: fmtAED(k.vatPayable ?? 0), sub: 'Output − input VAT', icon: 'ledger' },
+    { label: 'Active leads', value: k.interestedLeads, sub: `${k.leads} total · ${k.wonLeads} won`, icon: 'leads' },
   ]) + `
     <div class="grid cols-2 mb16">
       ${chartCard('Monthly expenses', 'dMonth')}

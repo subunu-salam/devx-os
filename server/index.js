@@ -6,8 +6,10 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import './db.js';
+import './schema.js';
 import { registerAuthRoutes } from './auth.js';
 import { registerRoutes } from './routes.js';
+import { registerExtRoutes } from './routes_ext.js';
 import { ensureSeed } from './seed.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -26,6 +28,7 @@ app.use(express.static(PUBLIC_DIR, { extensions: ['html', 'js'] }));
 // API routes
 registerAuthRoutes(app);
 registerRoutes(app);
+registerExtRoutes(app);
 
 // SPA fallback — only serve index.html for navigation requests, not missing assets/APIs
 app.get('*', (req, res, next) => {
