@@ -103,6 +103,7 @@ export async function deleteJournalsFor(source_type, source_id) {
 /* ============================ BALANCES & REPORTS ============================ */
 const NORMAL_DEBIT = new Set(['asset', 'expense']);
 
+/* Single-account debit/credit totals (used by accountBalance only). */
 async function drcr(accountId, { from, to } = {}) {
   let sql = 'SELECT COALESCE(SUM(debit),0) dr, COALESCE(SUM(credit),0) cr FROM journal_lines jl JOIN journals j ON j.id = jl.journal_id WHERE jl.account_id = ?';
   const args = [accountId];
@@ -111,19 +112,32 @@ async function drcr(accountId, { from, to } = {}) {
   return db.prepare(sql).get(...args);
 }
 
-export async function accountBalance(accountId, range = {}) {
-  const { dr, cr } = await drcr(accountId, range);
-  const acc = accountById(accountId);
-  const sign = NORMAL_DEBIT.has(acc.account_type) ? 1 : -1;
-  return round2((dr - cr) * sign);
+/* ONE query: net debit/credit for EVERY account in a date range → Map<account_id,{dr,cr}>.
+   Replaces the old per-account (N+1) drcr loops that were slow against a remote DB. */
+export async function balancesByAccount({ from, to } = {}) {
+  let sql = `SELECT jl.account_id, COALESCE(SUM(jl.debit),0) dr, COALESCE(SUM(jl.credit),0) cr
+             FROM journal_lines jl JOIN journals j ON j.id = jl.journal_id WHERE 1=1`;
+  const args = [];
+  if (from) { sql += ' AND j.journal_date >= ?'; args.push(from); }
+  if (to) { sql += ' AND j.journal_date <= ?'; args.push(to); }
+  sql += ' GROUP BY jl.account_id';
+  const rows = await db.prepare(sql).all(...args);
+  const m = new Map();
+  for (const r of rows) m.set(Number(r.account_id), { dr: Number(r.dr) || 0, cr: Number(r.cr) || 0 });
+  return m;
 }
 
-export async function trialBalance({ to } = {}) {
-  const accounts = await db.prepare('SELECT * FROM accounts ORDER BY code').all();
+async function allAccounts() {
+  return db.prepare('SELECT * FROM accounts ORDER BY code').all();
+}
+const balOf = (m, id) => m.get(Number(id)) || { dr: 0, cr: 0 };
+
+/* ---- Pure builders (no DB): take the accounts list + a balances Map ---- */
+function trialBalanceFrom(accounts, m) {
   const rows = [];
   let totalDr = 0, totalCr = 0;
   for (const a of accounts) {
-    const { dr, cr } = await drcr(a.id, { to });
+    const { dr, cr } = balOf(m, a.id);
     const net = round2(dr - cr);
     if (Math.abs(net) < 0.005 && dr === 0 && cr === 0) continue;
     const debit = net > 0 ? net : 0;
@@ -134,32 +148,32 @@ export async function trialBalance({ to } = {}) {
   return { rows, totalDebit: round2(totalDr), totalCredit: round2(totalCr) };
 }
 
-async function accountsOfTypeWithBalance(type, range = {}) {
-  const accts = await db.prepare('SELECT * FROM accounts WHERE account_type = ? ORDER BY code').all(type);
+function typeRows(accounts, m, type, sign) {
   const out = [];
-  for (const a of accts) {
-    const { dr, cr } = await drcr(a.id, range);
+  for (const a of accounts) {
+    if (a.account_type !== type) continue;
+    const { dr, cr } = balOf(m, a.id);
     const signed = round2(dr - cr);
     if (Math.abs(signed) < 0.005) continue;
-    out.push({ id: a.id, code: a.code, name: a.name, subtype: a.account_subtype, signed });
+    out.push({ id: a.id, code: a.code, name: a.name, subtype: a.account_subtype, signed, amount: sign > 0 ? signed : -signed });
   }
   return out;
 }
 
-export async function profitAndLoss({ from, to } = {}) {
-  const income = (await accountsOfTypeWithBalance('income', { from, to })).map((r) => ({ ...r, amount: -r.signed }));
-  const expense = (await accountsOfTypeWithBalance('expense', { from, to })).map((r) => ({ ...r, amount: r.signed }));
+function profitAndLossFrom(accounts, m, { from, to } = {}) {
+  const income = typeRows(accounts, m, 'income', -1);
+  const expense = typeRows(accounts, m, 'expense', 1);
   const totalIncome = round2(income.reduce((s, r) => s + r.amount, 0));
   const totalExpense = round2(expense.reduce((s, r) => s + r.amount, 0));
   const netProfit = round2(totalIncome - totalExpense);
   return { income, expense, totalIncome, totalExpense, netProfit, from, to };
 }
 
-export async function balanceSheet({ to } = {}) {
-  const assets = (await accountsOfTypeWithBalance('asset', { to })).map((r) => ({ ...r, amount: r.signed }));
-  const liabilities = (await accountsOfTypeWithBalance('liability', { to })).map((r) => ({ ...r, amount: -r.signed }));
-  const equity = (await accountsOfTypeWithBalance('equity', { to })).map((r) => ({ ...r, amount: -r.signed }));
-  const pl = await profitAndLoss({ to });
+function balanceSheetFrom(accounts, m, { to } = {}) {
+  const assets = typeRows(accounts, m, 'asset', 1);
+  const liabilities = typeRows(accounts, m, 'liability', -1);
+  const equity = typeRows(accounts, m, 'equity', -1);
+  const pl = profitAndLossFrom(accounts, m, { to });   // earnings to-date, same as before
   equity.push({ id: 0, code: '', name: 'Current Year Earnings', amount: pl.netProfit });
   const totalAssets = round2(assets.reduce((s, r) => s + r.amount, 0));
   const totalLiabilities = round2(liabilities.reduce((s, r) => s + r.amount, 0));
@@ -168,6 +182,55 @@ export async function balanceSheet({ to } = {}) {
     assets, liabilities, equity, totalAssets, totalLiabilities, totalEquity,
     totalLiabilitiesAndEquity: round2(totalLiabilities + totalEquity),
     balanced: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01, to,
+  };
+}
+
+function vatSummaryFrom(m, { from, to } = {}) {
+  const outVat = accountByCode(CODES.OUTPUT_VAT);
+  const inVat = accountByCode(CODES.INPUT_VAT);
+  const o = outVat ? balOf(m, outVat.id) : { dr: 0, cr: 0 };
+  const i = inVat ? balOf(m, inVat.id) : { dr: 0, cr: 0 };
+  const outputVat = round2(o.cr - o.dr);
+  const inputVat = round2(i.dr - i.cr);
+  return { outputVat, inputVat, netPayable: round2(outputVat - inputVat), from, to };
+}
+
+/* ---- Public report functions (each: 2 queries — accounts + balances) ---- */
+export async function accountBalance(accountId, range = {}) {
+  const { dr, cr } = await drcr(accountId, range);
+  const acc = accountById(accountId);
+  const sign = NORMAL_DEBIT.has(acc.account_type) ? 1 : -1;
+  return round2((dr - cr) * sign);
+}
+
+export async function trialBalance({ to } = {}) {
+  const [accounts, m] = await Promise.all([allAccounts(), balancesByAccount({ to })]);
+  return trialBalanceFrom(accounts, m);
+}
+
+export async function profitAndLoss({ from, to } = {}) {
+  const [accounts, m] = await Promise.all([allAccounts(), balancesByAccount({ from, to })]);
+  return profitAndLossFrom(accounts, m, { from, to });
+}
+
+export async function balanceSheet({ to } = {}) {
+  const [accounts, m] = await Promise.all([allAccounts(), balancesByAccount({ to })]);
+  return balanceSheetFrom(accounts, m, { to });
+}
+
+/* ONE combined snapshot for the dashboard / books summary.
+   3 queries total (accounts + period balances + to-date balances) instead of ~65. */
+export async function financialSnapshot({ from, to } = {}) {
+  const [accounts, mPeriod, mToDate] = await Promise.all([
+    allAccounts(),
+    balancesByAccount({ from, to }),
+    balancesByAccount({ to }),
+  ]);
+  return {
+    pl: profitAndLossFrom(accounts, mPeriod, { from, to }),
+    bs: balanceSheetFrom(accounts, mToDate, { to }),
+    vat: vatSummaryFrom(mPeriod, { from, to }),
+    trialBalance: trialBalanceFrom(accounts, mToDate),
   };
 }
 
@@ -214,13 +277,8 @@ function agingBuckets(rows, ref, balOf, dueOf, nameOf, docOf) {
 }
 
 export async function vatSummary({ from, to } = {}) {
-  const outVat = accountByCode(CODES.OUTPUT_VAT);
-  const inVat = accountByCode(CODES.INPUT_VAT);
-  const o = outVat ? await drcr(outVat.id, { from, to }) : { dr: 0, cr: 0 };
-  const i = inVat ? await drcr(inVat.id, { from, to }) : { dr: 0, cr: 0 };
-  const outputVat = round2(o.cr - o.dr);
-  const inputVat = round2(i.dr - i.cr);
-  return { outputVat, inputVat, netPayable: round2(outputVat - inputVat), from, to };
+  const m = await balancesByAccount({ from, to });
+  return vatSummaryFrom(m, { from, to });
 }
 
-export default { postJournal, deleteJournalsFor, accountBalance, trialBalance, profitAndLoss, balanceSheet, generalLedger, arAging, apAging, vatSummary };
+export default { postJournal, deleteJournalsFor, accountBalance, trialBalance, profitAndLoss, balanceSheet, generalLedger, arAging, apAging, vatSummary, financialSnapshot, balancesByAccount };

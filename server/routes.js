@@ -8,7 +8,7 @@ import { UPLOAD_DIR } from './db.js';
 import { requireAuth, requireAdmin, requireSuper } from './auth.js';
 import { logActivity } from './activity.js';
 import { crudRouter, h } from './crud.js';
-import { postJournal, deleteJournalsFor, idByCode, CODES, profitAndLoss, arAging, apAging, vatSummary, balanceSheet, expenseCategoryToCode, nextNumber } from './accounting.js';
+import { postJournal, deleteJournalsFor, idByCode, CODES, profitAndLoss, arAging, apAging, vatSummary, balanceSheet, financialSnapshot, expenseCategoryToCode, nextNumber } from './accounting.js';
 import { postInvoiceJournal } from './routes_ext.js';
 
 const storage = multer.diskStorage({
@@ -189,35 +189,45 @@ export function registerRoutes(app) {
   // ---- Dashboard summary ----
   app.get('/api/dashboard', requireAuth, h(async (req, res) => {
     const month = today().slice(0, 7);
-    const one = async (sql, ...a) => await db.prepare(sql).get(...a);
-    const totalMeetings = (await one('SELECT COUNT(*) n FROM meetings')).n;
-    const monthMeetings = (await one("SELECT COUNT(*) n FROM meetings WHERE substr(meeting_date,1,7)=?", month)).n;
-    const completed = (await one("SELECT COUNT(*) n FROM meetings WHERE status='Completed'")).n;
-    const pending = (await one("SELECT COUNT(*) n FROM meetings WHERE status='Pending'")).n;
-    const totalExpenses = (await one('SELECT COALESCE(SUM(amount),0) s FROM expenses')).s;
-    const monthExpenses = (await one("SELECT COALESCE(SUM(amount),0) s FROM expenses WHERE substr(expense_date,1,7)=?", month)).s;
-    const pl = await profitAndLoss({});
-    const bs = await balanceSheet({});
-    const ar = await arAging({});
-    const ap = await apAging({});
-    const vat = await vatSummary({});
+    const one = (sql, ...a) => db.prepare(sql).get(...a);
+    // Fire every independent query at once — no sequential round-trips to the DB.
+    const [
+      totalMeetingsR, monthMeetingsR, completedR, pendingR, totalExpensesR, monthExpensesR,
+      snap, ar, ap,
+      leadsR, wonLeadsR, interestedLeadsR, openDealsR, pipelineValueR,
+      expenseByMonth, expenseByCategory, expenseByPerson, meetingsByStatus, recentMeetings, recentExpenses,
+    ] = await Promise.all([
+      one('SELECT COUNT(*) n FROM meetings'),
+      one("SELECT COUNT(*) n FROM meetings WHERE substr(meeting_date,1,7)=?", month),
+      one("SELECT COUNT(*) n FROM meetings WHERE status='Completed'"),
+      one("SELECT COUNT(*) n FROM meetings WHERE status='Pending'"),
+      one('SELECT COALESCE(SUM(amount),0) s FROM expenses'),
+      one("SELECT COALESCE(SUM(amount),0) s FROM expenses WHERE substr(expense_date,1,7)=?", month),
+      financialSnapshot({}),
+      arAging({}),
+      apAging({}),
+      one('SELECT COUNT(*) n FROM leads'),
+      one("SELECT COUNT(*) n FROM leads WHERE status='Won'"),
+      one("SELECT COUNT(*) n FROM leads WHERE status IN ('Interested','Won')"),
+      one("SELECT COUNT(*) n FROM deals WHERE stage NOT IN ('Closed Won','Closed Lost')"),
+      one("SELECT COALESCE(SUM(amount),0) s FROM deals WHERE stage NOT IN ('Closed Won','Closed Lost')"),
+      db.prepare(`SELECT substr(expense_date,1,7) ym, SUM(amount) total FROM expenses GROUP BY substr(expense_date,1,7) ORDER BY ym`).all(),
+      db.prepare(`SELECT category, SUM(amount) total FROM expenses GROUP BY category ORDER BY total DESC`).all(),
+      db.prepare(`SELECT person, SUM(amount) total FROM expenses GROUP BY person ORDER BY total DESC`).all(),
+      db.prepare(`SELECT status, COUNT(*) n FROM meetings GROUP BY status`).all(),
+      db.prepare('SELECT * FROM meetings ORDER BY meeting_date DESC, id DESC LIMIT 6').all(),
+      db.prepare('SELECT * FROM expenses ORDER BY expense_date DESC, id DESC LIMIT 6').all(),
+    ]);
+    const { pl, bs, vat } = snap;
+    const totalMeetings = totalMeetingsR.n, monthMeetings = monthMeetingsR.n, completed = completedR.n, pending = pendingR.n;
+    const totalExpenses = totalExpensesR.s, monthExpenses = monthExpensesR.s;
     const credit = pl.totalIncome, debit = pl.totalExpense;
     const netPosition = bs.totalEquity, netProfit = pl.netProfit;
     const receivables = ar.total, payables = ap.total, vatPayable = vat.netPayable;
     const cashBank = bs.assets.filter((a) => ['1000', '1001', '1010'].includes(a.code)).reduce((s, a) => s + a.amount, 0);
-    const leads = (await one('SELECT COUNT(*) n FROM leads')).n;
-    const wonLeads = (await one("SELECT COUNT(*) n FROM leads WHERE status='Won'")).n;
-    const interestedLeads = (await one("SELECT COUNT(*) n FROM leads WHERE status IN ('Interested','Won')")).n;
-    const openDeals = (await one("SELECT COUNT(*) n FROM deals WHERE stage NOT IN ('Closed Won','Closed Lost')")).n;
-    const pipelineValue = (await one("SELECT COALESCE(SUM(amount),0) s FROM deals WHERE stage NOT IN ('Closed Won','Closed Lost')")).s;
+    const leads = leadsR.n, wonLeads = wonLeadsR.n, interestedLeads = interestedLeadsR.n;
+    const openDeals = openDealsR.n, pipelineValue = pipelineValueR.s;
     const outstanding = ar.total;
-
-    const expenseByMonth = await db.prepare(`SELECT substr(expense_date,1,7) ym, SUM(amount) total FROM expenses GROUP BY substr(expense_date,1,7) ORDER BY ym`).all();
-    const expenseByCategory = await db.prepare(`SELECT category, SUM(amount) total FROM expenses GROUP BY category ORDER BY total DESC`).all();
-    const expenseByPerson = await db.prepare(`SELECT person, SUM(amount) total FROM expenses GROUP BY person ORDER BY total DESC`).all();
-    const meetingsByStatus = await db.prepare(`SELECT status, COUNT(*) n FROM meetings GROUP BY status`).all();
-    const recentMeetings = await db.prepare('SELECT * FROM meetings ORDER BY meeting_date DESC, id DESC LIMIT 6').all();
-    const recentExpenses = await db.prepare('SELECT * FROM expenses ORDER BY expense_date DESC, id DESC LIMIT 6').all();
 
     res.json({
       kpi: { totalMeetings, monthMeetings, completed, pending, totalExpenses, monthExpenses,

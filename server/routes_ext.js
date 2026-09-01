@@ -6,7 +6,7 @@ import { crudRouter, h } from './crud.js';
 import {
   postJournal, deleteJournalsFor, nextNumber, idByCode, CODES,
   trialBalance, profitAndLoss, balanceSheet, generalLedger, arAging, apAging, vatSummary,
-  getSetting, setSetting,
+  financialSnapshot, getSetting, setSetting,
 } from './accounting.js';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -565,14 +565,12 @@ export function registerExtRoutes(app) {
 
   /* ============================ FINANCE SUMMARY ============================ */
   app.get('/api/books-summary', requireAuth, h(async (req, res) => {
-    const pl = await profitAndLoss({});
-    const ar = await arAging({});
-    const ap = await apAging({});
-    const vat = await vatSummary({});
-    const bs = await balanceSheet({});
+    const [snap, ar, ap] = await Promise.all([financialSnapshot({}), arAging({}), apAging({})]);
+    const { pl, bs, vat } = snap;
     const bankId = idByCode(CODES.BANK), cashId = idByCode(CODES.PETTY_CASH);
-    const bal = async (id) => id ? Number((await db.prepare('SELECT COALESCE(SUM(debit)-SUM(credit),0) v FROM journal_lines WHERE account_id=?').get(id))?.v || 0) : 0;
-    const cash = (await bal(bankId)) + (await bal(cashId));
+    // Cash & bank come straight from the to-date balances already in the snapshot.
+    const cashFromBs = bs.assets.filter((a) => [CODES.BANK, CODES.PETTY_CASH].includes(a.code)).reduce((s, a) => s + a.amount, 0);
+    const cash = cashFromBs;
     res.json({
       totalIncome: pl.totalIncome, totalExpense: pl.totalExpense, netProfit: pl.netProfit,
       receivables: ar.total, payables: ap.total, vatPayable: vat.netPayable,
