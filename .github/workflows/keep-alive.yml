@@ -1,0 +1,37 @@
+name: Keep app awake
+
+# Render's free plan sleeps the server after ~15 minutes of no traffic, and Neon's
+# free plan pauses the database when idle — both cause a slow first request while they
+# wake up. This workflow pings the app every 5 minutes so it stays warm and the first
+# real visit is fast. It runs on GitHub's free runners (unlimited for public repos).
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # every 5 minutes
+  workflow_dispatch: {}       # lets you run it manually from the Actions tab
+
+# If a run is still going when the next is due, don't pile them up.
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping the app until it responds
+        run: |
+          URL="https://devx-os-kael.onrender.com/"
+          # Up to 4 tries — a cold start can take ~50s, so give it time.
+          for i in 1 2 3 4; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -m 70 "$URL" || echo "000")
+            echo "Attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "App is awake."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Did not get 200 in time — the ping still reached the server and started waking it."
+          exit 0
