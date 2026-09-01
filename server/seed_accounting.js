@@ -1,11 +1,8 @@
-// Seeds the Chart of Accounts and migrates existing data into the double-entry ledger,
-// plus a little sample CRM + Books data so every report and pipeline has something to show.
+// Seeds the Chart of Accounts and migrates existing data into the double-entry ledger (Postgres, async).
 import db from './schema.js';
-import { postJournal, CODES, idByCode, expenseCategoryToCode } from './accounting.js';
+import { postJournal, CODES, idByCode, expenseCategoryToCode, loadAccountCache } from './accounting.js';
 
-/* [code, name, type, subtype, is_system] */
 const ACCOUNTS = [
-  // Assets
   ['1000', 'Petty Cash', 'asset', 'cash', 1],
   ['1001', 'Undeposited Funds', 'asset', 'cash', 1],
   ['1010', 'Business Bank Account', 'asset', 'bank', 1],
@@ -14,24 +11,19 @@ const ACCOUNTS = [
   ['1400', 'Prepaid Expenses', 'asset', 'current_asset', 0],
   ['1500', 'Furniture & Equipment', 'asset', 'fixed_asset', 0],
   ['1510', 'Input VAT (Recoverable)', 'asset', 'current_asset', 1],
-  // Liabilities
   ['2000', 'Accounts Payable', 'liability', 'accounts_payable', 1],
   ['2100', 'VAT Payable (Output)', 'liability', 'tax', 1],
   ['2200', 'Employee Reimbursements', 'liability', 'current_liability', 0],
-  // Equity
   ['3000', "Owner's Equity / Capital", 'equity', 'equity', 1],
   ['3100', "Owner's Drawings", 'equity', 'equity', 0],
   ['3200', 'Retained Earnings', 'equity', 'equity', 1],
-  // Income
   ['4000', 'Sales / Services Income', 'income', 'income', 1],
   ['4100', 'Other Income', 'income', 'other_income', 0],
-  // Cost of Goods Sold
   ['5000', 'Cost of Goods Sold', 'expense', 'cost_of_goods_sold', 1],
   ['5010', 'Labor', 'expense', 'cost_of_goods_sold', 0],
   ['5020', 'Materials', 'expense', 'cost_of_goods_sold', 0],
   ['5030', 'Subcontractor', 'expense', 'cost_of_goods_sold', 0],
   ['5040', 'Job Costing', 'expense', 'cost_of_goods_sold', 0],
-  // Expenses
   ['6000', 'Salaries & Wages', 'expense', 'expense', 0],
   ['6010', 'Rent Expense', 'expense', 'expense', 0],
   ['6020', 'Office & Admin Expense', 'expense', 'expense', 0],
@@ -43,7 +35,6 @@ const ACCOUNTS = [
   ['6080', 'Repairs & Maintenance', 'expense', 'expense', 0],
   ['6090', 'Consultant Expense', 'expense', 'expense', 0],
   ['6100', 'Depreciation Expense', 'expense', 'expense', 0],
-  // Other Expenses
   ['6900', 'Other Expenses', 'expense', 'other_expense', 0],
   ['6910', 'Exchange Gain or Loss', 'expense', 'other_expense', 0],
   ['6920', 'Lodging', 'expense', 'other_expense', 0],
@@ -56,14 +47,12 @@ const CUSTOMERS = [
   ['vendor', 'Dubai Economy (DED)', 'Department of Economy & Tourism', '', '', ''],
   ['vendor', 'Microsoft', 'Microsoft Corporation', '', '', ''],
 ];
-
 const ITEMS = [
   ['AI CRM Platform Setup', 'service', 'CRM-SETUP', 'One-time CRM implementation & onboarding', 15000, 0, 5, CODES.SALES],
   ['Website Development', 'service', 'WEB-DEV', 'Business website design & build', 8000, 0, 5, CODES.SALES],
   ['AI Forecasting Tool', 'service', 'AI-FORECAST', 'Custom demand-forecasting model', 12000, 0, 5, CODES.SALES],
   ['Monthly Support Retainer', 'service', 'SUPPORT-M', 'Ongoing support & maintenance', 2500, 0, 5, CODES.SALES],
 ];
-
 const CRM_ACCOUNTS = [
   ['Cee Port Trading LLC', 'Trading', 'https://ceeport.ae', '+971 55 222 3344', 'Dubai', '20-50', 'Subunu'],
   ['Rebel Foods', 'Food & Beverage', '', '+971 52 333 4455', 'Dubai', '50-200', 'Suhail'],
@@ -85,67 +74,61 @@ const TASKS = [
   ['Prepare CRM proposal for Rebel Foods', 'Rebel Foods — Team CRM', 'To-Do', 'Normal'],
 ];
 
-export function seedAccounting(founderId) {
-  const have = db.prepare('SELECT COUNT(*) n FROM accounts').get().n;
-  if (have === 0) {
-    const ins = db.prepare('INSERT INTO accounts (code, name, account_type, account_subtype, is_system) VALUES (?,?,?,?,?)');
-    for (const a of ACCOUNTS) ins.run(...a);
-  }
+const count = async (t) => (await db.prepare(`SELECT COUNT(*) n FROM ${t}`).get()).n;
 
-  // Founder investment → opening journal (Dr Bank, Cr Owner's Equity).
-  const openingExists = db.prepare("SELECT COUNT(*) n FROM journals WHERE source_type='opening'").get().n;
+export async function seedAccounting(founderId) {
+  if ((await count('accounts')) === 0) {
+    const ins = db.prepare('INSERT INTO accounts (code, name, account_type, account_subtype, is_system) VALUES (?,?,?,?,?)');
+    for (const a of ACCOUNTS) await ins.run(...a);
+  }
+  await loadAccountCache();
+
+  // Founder investment → opening journal.
+  const openingExists = (await db.prepare("SELECT COUNT(*) n FROM journals WHERE source_type='opening'").get()).n;
   if (!openingExists) {
-    postJournal(
+    await postJournal(
       { journal_date: '2026-07-01', reference: '5 x AED 50,000 cheques', notes: 'Founder investment into DevX Technologies', source_type: 'opening' },
-      [
-        { code: CODES.BANK, debit: 250000, credit: 0, description: 'Founder capital introduced' },
-        { code: CODES.OWNER_EQUITY, debit: 0, credit: 250000, description: 'Founder capital introduced' },
-      ],
+      [{ code: CODES.BANK, debit: 250000, credit: 0, description: 'Founder capital introduced' },
+       { code: CODES.OWNER_EQUITY, debit: 0, credit: 250000, description: 'Founder capital introduced' }],
       { id: founderId });
   }
 
-  // Migrate seeded expenses → journals (Dr expense account, Cr Bank).
-  const expenses = db.prepare('SELECT * FROM expenses').all();
+  // Migrate seeded expenses → journals.
+  const expenses = await db.prepare('SELECT * FROM expenses').all();
   for (const e of expenses) {
-    const done = db.prepare("SELECT COUNT(*) n FROM journals WHERE source_type='expense' AND source_id=?").get(e.id).n;
+    const done = (await db.prepare("SELECT COUNT(*) n FROM journals WHERE source_type='expense' AND source_id=?").get(e.id)).n;
     if (done) continue;
     const code = expenseCategoryToCode(e.category, e.other_details);
-    postJournal(
+    await postJournal(
       { journal_date: e.expense_date, reference: e.other_details || e.category, notes: `Expense — ${e.category}`, source_type: 'expense', source_id: e.id },
-      [
-        { code, debit: e.amount, credit: 0, description: e.other_details || e.category },
-        { code: CODES.BANK, debit: 0, credit: e.amount, description: `Paid by ${e.person}` },
-      ],
+      [{ code, debit: e.amount, credit: 0, description: e.other_details || e.category },
+       { code: CODES.BANK, debit: 0, credit: e.amount, description: `Paid by ${e.person}` }],
       { id: e.created_by || founderId });
   }
 
-  // Sample Books contacts + items.
-  if (db.prepare('SELECT COUNT(*) n FROM contacts').get().n === 0) {
+  if ((await count('contacts')) === 0) {
     const ins = db.prepare('INSERT INTO contacts (contact_type, display_name, company_name, email, phone, billing_address, created_by) VALUES (?,?,?,?,?,?,?)');
-    for (const c of CUSTOMERS) ins.run(...c, founderId);
+    for (const c of CUSTOMERS) await ins.run(...c, founderId);
   }
-  if (db.prepare('SELECT COUNT(*) n FROM items').get().n === 0) {
+  if ((await count('items')) === 0) {
     const ins = db.prepare('INSERT INTO items (name, item_type, sku, description, sell_price, cost_price, tax_percent, income_account_id, created_by) VALUES (?,?,?,?,?,?,?,?,?)');
-    for (const it of ITEMS) ins.run(it[0], it[1], it[2], it[3], it[4], it[5], it[6], idByCode(it[7]), founderId);
+    for (const it of ITEMS) await ins.run(it[0], it[1], it[2], it[3], it[4], it[5], it[6], idByCode(it[7]), founderId);
   }
-
-  // Sample CRM.
-  if (db.prepare('SELECT COUNT(*) n FROM crm_accounts').get().n === 0) {
+  if ((await count('crm_accounts')) === 0) {
     const ins = db.prepare('INSERT INTO crm_accounts (name, industry, website, phone, billing_city, employees, owner, created_by) VALUES (?,?,?,?,?,?,?,?)');
-    for (const a of CRM_ACCOUNTS) ins.run(...a, founderId);
+    for (const a of CRM_ACCOUNTS) await ins.run(...a, founderId);
   }
-  if (db.prepare('SELECT COUNT(*) n FROM crm_contacts').get().n === 0) {
+  if ((await count('crm_contacts')) === 0) {
     const ins = db.prepare('INSERT INTO crm_contacts (first_name, last_name, account_name, title, email, phone, owner, lead_source, created_by) VALUES (?,?,?,?,?,?,?,?,?)');
-    for (const c of CRM_CONTACTS) ins.run(...c, founderId);
+    for (const c of CRM_CONTACTS) await ins.run(...c, founderId);
   }
-  if (db.prepare('SELECT COUNT(*) n FROM deals').get().n === 0) {
+  if ((await count('deals')) === 0) {
     const ins = db.prepare('INSERT INTO deals (name, account_name, contact_name, amount, stage, probability, lead_source, owner, closing_date, created_by) VALUES (?,?,?,?,?,?,?,?,?,?)');
-    const closeDate = '2026-09-30';
-    for (const d of DEALS) ins.run(d[0], d[1], d[2], d[3], d[4], d[5], d[6], 'Subunu', closeDate, founderId);
+    for (const d of DEALS) await ins.run(d[0], d[1], d[2], d[3], d[4], d[5], d[6], 'Subunu', '2026-09-30', founderId);
   }
-  if (db.prepare('SELECT COUNT(*) n FROM tasks').get().n === 0) {
+  if ((await count('tasks')) === 0) {
     const ins = db.prepare('INSERT INTO tasks (subject, related_to, task_type, priority, status, owner, due_date, created_by) VALUES (?,?,?,?,?,?,?,?)');
-    for (const t of TASKS) ins.run(t[0], t[1], t[2], t[3], 'Open', 'Subunu', '2026-09-05', founderId);
+    for (const t of TASKS) await ins.run(t[0], t[1], t[2], t[3], 'Open', 'Subunu', '2026-09-05', founderId);
   }
 
   console.log('Seeded accounting: chart of accounts, opening journal, expense journals, sample Books + CRM data.');

@@ -1,9 +1,11 @@
 // Seeds the database with the DevX team logins and the migrated Excel data.
 // Idempotent: only seeds when the users table is empty. Run `npm run reset` to wipe + reseed.
 import bcrypt from 'bcryptjs';
-import db from './db.js';
-import './schema.js';
+import db, { initCoreSchema } from './db.js';
+import { initExtSchema } from './schema.js';
 import { seedAccounting } from './seed_accounting.js';
+
+export async function initDb() { await initCoreSchema(); await initExtSchema(); }
 
 const DEFAULT_PASSWORD = 'DevX@2026';
 
@@ -82,12 +84,12 @@ const LEADS = [
   ['Shain Sha', 'Hospital', 'Follow-up', 'Reminder', 'Remind in 2 weeks', 'Follow up in 2 weeks', null],
 ];
 
-export function seedAll() {
+export async function seedAll() {
   const hash = bcrypt.hashSync(DEFAULT_PASSWORD, 10);
   const insUser = db.prepare('INSERT INTO users (full_name, email, title, role, is_super, password_hash) VALUES (?,?,?,?,?,?)');
   const idByName = {};
   for (const u of USERS) {
-    const info = insUser.run(u.full_name, u.email, u.title, u.role, u.is_super || 0, hash);
+    const info = await insUser.run(u.full_name, u.email, u.title, u.role, u.is_super || 0, hash);
     idByName[u.full_name] = info.lastInsertRowid;
   }
   const founder = idByName['Subunu'];
@@ -96,27 +98,26 @@ export function seedAll() {
   const insMeeting = db.prepare(`INSERT INTO meetings
     (meeting_date, meeting_time, client_name, business_category, meeting_type, meeting_mode, confirmed_by, status, remarks, created_by)
     VALUES (?,?,?,?,?,?,?,?,?,?)`);
-  for (const m of MEETINGS) insMeeting.run(...m, m[6] ? personToId(m[6]) : founder);
+  for (const m of MEETINGS) await insMeeting.run(...m, m[6] ? personToId(m[6]) : founder);
 
   const insExpense = db.prepare(`INSERT INTO expenses
     (expense_date, person, category, other_details, amount, description, receipt_url, month, created_by)
     VALUES (?,?,?,?,?,?,?,?,?)`);
-  for (const e of EXPENSES) insExpense.run(...e, personToId(e[1]));
+  for (const e of EXPENSES) await insExpense.run(...e, personToId(e[1]));
 
   const insLedger = db.prepare(`INSERT INTO ledger_entries
     (entry_date, type, category, description, amount, party, method, reference, attachment_url, created_by)
     VALUES (?,?,?,?,?,?,?,?,?,?)`);
-  for (const l of LEDGER) insLedger.run(...l, founder);
+  for (const l of LEDGER) await insLedger.run(...l, founder);
 
   const insLead = db.prepare(`INSERT INTO leads
     (name, business_category, status, source, notes, next_action, next_action_date, created_by)
     VALUES (?,?,?,?,?,?,?,?)`);
-  for (const ld of LEADS) insLead.run(...ld, founder);
+  for (const ld of LEADS) await insLead.run(...ld, founder);
 
   console.log(`Seeded: ${USERS.length} users, ${MEETINGS.length} meetings, ${EXPENSES.length} expenses, ${LEDGER.length} ledger entries, ${LEADS.length} leads.`);
-  seedAccounting(founder);
+  await seedAccounting(founder);
 
-  // Seed a little activity history so the audit log isn't empty on first run.
   const insAct = db.prepare(`INSERT INTO activity_logs (user_id, user_name, action, entity_type, entity_id, description, created_at) VALUES (?,?,?,?,?,?,?)`);
   const HISTORY = [
     ['create', 'system', null, 'Migrated 6 meetings from the Excel tracker', '2026-07-01 09:05:00'],
@@ -125,37 +126,44 @@ export function seedAll() {
     ['create', 'lead', null, 'Migrated 27 leads from the outreach tracker', '2026-07-01 09:08:00'],
     ['create', 'account', null, 'Set up the chart of accounts (Zoho Books structure)', '2026-07-01 09:10:00'],
   ];
-  for (const h of HISTORY) insAct.run(founder, 'Subunu', h[0], h[1], h[2], h[3], h[4]);
+  for (const hh of HISTORY) await insAct.run(founder, 'Subunu', hh[0], hh[1], hh[2], hh[3], hh[4]);
 }
 
-export function ensureSeed() {
-  const count = db.prepare('SELECT COUNT(*) n FROM users').get().n;
-  if (count === 0) {
+export async function ensureSeed() {
+  await initDb();
+  const n = (await db.prepare('SELECT COUNT(*) n FROM users').get()).n;
+  if (n === 0) {
     console.log('Empty database — seeding initial data...');
-    seedAll();
+    await seedAll();
   } else {
-    // Backfill accounting + CRM for databases created before these modules existed.
-    const founder = db.prepare("SELECT id FROM users WHERE lower(email)='subinu@devxpert.ae'").get()?.id
-      || db.prepare('SELECT id FROM users ORDER BY id LIMIT 1').get()?.id;
-    try { seedAccounting(founder); } catch (e) { console.error('accounting backfill failed:', e.message); }
+    const founder = (await db.prepare("SELECT id FROM users WHERE lower(email)='subinu@devxpert.ae'").get())?.id
+      || (await db.prepare('SELECT id FROM users ORDER BY id LIMIT 1').get())?.id;
+    try { await seedAccounting(founder); } catch (e) { console.error('accounting backfill failed:', e.message); }
   }
 }
 
 // CLI: `node server/seed.js` seeds if empty; `--reset` wipes everything first.
 const isMain = process.argv[1] && process.argv[1].endsWith('seed.js');
 if (isMain) {
-  if (process.argv.includes('--reset')) {
-    for (const t of ['activity_logs', 'journal_lines', 'journals', 'accounts', 'invoice_items', 'invoices',
-                     'estimate_items', 'estimates', 'bill_items', 'bills', 'payments',
-                     'credit_note_items', 'credit_notes', 'items', 'contacts',
-                     'crm_accounts', 'crm_contacts', 'deals', 'tasks',
-                     'leads', 'ledger_entries', 'expenses', 'meetings', 'users']) {
-      try { db.prepare(`DELETE FROM ${t}`).run(); } catch {}
+  (async () => {
+    await initDb();
+    if (process.argv.includes('--reset')) {
+      for (const t of ['activity_logs', 'journal_lines', 'journals', 'accounts', 'invoice_items', 'invoices',
+                       'estimate_items', 'estimates', 'bill_items', 'bills', 'payments',
+                       'credit_note_items', 'credit_notes', 'sales_order_items', 'sales_orders',
+                       'purchase_order_items', 'purchase_orders', 'vendor_credit_items', 'vendor_credits',
+                       'recurring_invoice_items', 'recurring_invoices', 'delivery_challan_items', 'delivery_challans',
+                       'documents', 'time_entries', 'projects', 'items', 'contacts', 'settings',
+                       'crm_accounts', 'crm_contacts', 'deals', 'tasks',
+                       'leads', 'ledger_entries', 'expenses', 'meetings', 'users']) {
+        try { await db.prepare(`TRUNCATE ${t} RESTART IDENTITY CASCADE`).run(); } catch (e) { /* table may not exist */ }
+      }
+      console.log('Database wiped.');
+      await seedAll();
+    } else {
+      await ensureSeed();
     }
-    console.log('Database wiped.');
-    seedAll();
-  } else {
-    ensureSeed();
-  }
-  console.log('Done.');
+    console.log('Done.');
+    process.exit(0);
+  })().catch((e) => { console.error(e); process.exit(1); });
 }

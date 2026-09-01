@@ -25,12 +25,12 @@ function setCookie(res, token) {
   });
 }
 
-export function requireAuth(req, res, next) {
+export async function requireAuth(req, res, next) {
   const token = req.cookies?.[COOKIE_NAME];
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, full_name, email, title, role, is_super FROM users WHERE id = ?').get(payload.id);
+    const user = await db.prepare('SELECT id, full_name, email, title, role, is_super FROM users WHERE id = ?').get(payload.id);
     if (!user) return res.status(401).json({ error: 'Session expired' });
     user.is_super = !!user.is_super;
     req.user = user;
@@ -51,10 +51,10 @@ export function requireSuper(req, res, next) {
 }
 
 export function registerAuthRoutes(app) {
-  app.post('/api/auth/login', (req, res) => {
+  app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-    const user = db.prepare('SELECT * FROM users WHERE lower(email) = lower(?)').get(String(email).trim());
+    const user = await db.prepare('SELECT * FROM users WHERE lower(email) = lower(?)').get(String(email).trim());
     if (!user || !bcrypt.compareSync(password, user.password_hash)) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -74,17 +74,17 @@ export function registerAuthRoutes(app) {
     res.json({ user: req.user });
   });
 
-  app.post('/api/auth/change-password', requireAuth, (req, res) => {
+  app.post('/api/auth/change-password', requireAuth, async (req, res) => {
     const { current_password, new_password } = req.body || {};
     if (!new_password || new_password.length < 6) {
       return res.status(400).json({ error: 'New password must be at least 6 characters' });
     }
-    const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
+    const row = await db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
     if (!bcrypt.compareSync(current_password || '', row.password_hash)) {
       return res.status(400).json({ error: 'Current password is incorrect' });
     }
     const hash = bcrypt.hashSync(new_password, 10);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.user.id);
+    await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.user.id);
     logActivity(req.user, 'update', 'auth', req.user.id, 'Changed account password');
     res.json({ ok: true });
   });

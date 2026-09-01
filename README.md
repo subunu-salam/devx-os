@@ -37,9 +37,9 @@ No external services required — it runs with one command locally and deploys t
 
 > ⚠️ **Data persistence on Render:** the SQLite database lives on a disk. On Render's **free** plan the
 > filesystem is wiped on every restart/redeploy/sleep, so all data (including activity history) resets.
-> `render.yaml` is set to the **starter** (paid) plan with a 1 GB persistent disk at `/var/data` so your
-> data survives. If you must stay on free, expect the database to reset — that is a Render limitation,
-> not a bug in the app.
+> DevX OS stores all data in a **Postgres database** (e.g. a free [Neon](https://neon.com) database).
+> Because the data lives in Postgres — not on the server's disk — **nothing resets on redeploy**, even
+> on Render's free plan, and no persistent disk is required. Set `DATABASE_URL` and you're done.
 
 **Everything else:** branded dashboard, Export Center (CSV/PDF for any module), Activity audit log,
 role-based access (admin / accountant / super admin), AED currency throughout.
@@ -48,17 +48,20 @@ role-based access (admin / accountant / super admin), AED currency throughout.
 
 ## 1. Run it locally (terminal)
 
-You need **Node.js 18+** installed ([nodejs.org](https://nodejs.org)).
+You need **Node.js 18+** installed ([nodejs.org](https://nodejs.org)) and a **Postgres database URL**
+(a free [Neon](https://neon.com) database works great — no credit card).
 
 ```bash
 # 1. unzip the project, then from inside the folder:
-npm install        # installs dependencies
-npm start          # starts the server (seeds the database on first run)
+npm install                                   # installs dependencies
+export DATABASE_URL="postgresql://user:pass@host/db?sslmode=require"   # your Neon URL
+npm start                                     # starts the server (seeds the database on first run)
 ```
 
 Open **http://localhost:3000** in your browser.
 
-The first run automatically creates the database and loads your team + all migrated data.
+The first run automatically creates all tables and loads your team + all migrated data into Postgres.
+`DATABASE_URL` is required — the app tells you if it's missing.
 
 ### Login accounts (default password: `DevX@2026`)
 
@@ -81,29 +84,25 @@ npm run reset      # wipe the database and re-seed the original data (careful!)
 
 ---
 
-## 2. Deploy to Render
+## 2. Deploy to Render (free plan — data persists in Postgres)
 
-Your data (SQLite database + uploaded receipts) is stored in the `DATA_DIR` folder.
-On Render, attach a **persistent disk** so it survives redeploys — the included
-`render.yaml` already does this for you.
+Because all data lives in **Postgres** (not on the server disk), the free plan is enough and
+**no persistent disk is needed**. You just need a free Neon database.
 
-### Option A — Blueprint (easiest)
-1. Push this project to a **GitHub** repo.
-2. In Render: **New + → Blueprint**, connect the repo. Render reads `render.yaml`,
-   creates the web service, generates a `JWT_SECRET`, and attaches a 1 GB persistent disk.
-3. Click **Apply**. When it finishes, open the Render URL — done.
+### Step 1 — Create a free Postgres database (Neon, no card)
+1. Go to **[neon.com](https://neon.com)** → **Sign up** (Google/GitHub).
+2. It creates a project + database automatically. Copy the **Connection string**
+   (starts with `postgresql://…?sslmode=require`).
 
-### Option B — Manual Web Service
-1. Push to GitHub, then in Render: **New + → Web Service**, connect the repo.
-2. Settings:
-   - **Build command:** `npm install`
-   - **Start command:** `npm start`
-3. **Environment** → add variables:
-   - `NODE_ENV = production`
-   - `JWT_SECRET = <a long random string>`
-   - `DATA_DIR = /var/data`
-4. **Disks** → add a disk, mount path **`/var/data`**, size 1 GB.
-5. Create the service. Render sets `PORT` automatically; the app reads it.
+### Step 2 — Point Render at it
+1. Push this project to your **GitHub** repo (Render auto-deploys from it).
+2. In the Render dashboard → your **devx-os** service → **Environment** → add:
+   - `DATABASE_URL = <your Neon connection string>`
+   - (`JWT_SECRET` is already generated; `NODE_ENV = production`.)
+3. Render redeploys. On first boot it creates the tables and seeds your data **into Neon**,
+   where it stays permanently — activity log included — across every redeploy and sleep.
+
+Render sets `PORT` automatically. No disk, no paid plan required.
 
 ---
 
@@ -113,7 +112,7 @@ On Render, attach a **persistent disk** so it survives redeploys — the include
 devx-os/
 ├── server/                 # Express backend
 │   ├── index.js            # entry point
-│   ├── db.js               # core SQLite schema
+│   ├── db.js               # Postgres connection + core schema (async data layer)
 │   ├── schema.js           # Books + CRM tables (accounts, journals, bills, deals…)
 │   ├── accounting.js       # double-entry engine + report queries (P&L, BS, TB, aging, VAT)
 │   ├── auth.js             # login / JWT cookie / roles
