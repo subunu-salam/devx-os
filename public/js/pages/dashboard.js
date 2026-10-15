@@ -169,7 +169,7 @@ function gauge(pct) {
   const id = 'gg' + Math.random().toString(36).slice(2, 7);
   setTimeout(() => { const el = document.getElementById(id); if (el) el.style.strokeDashoffset = off; }, 80);
   return `<svg viewBox="0 0 200 116">
-    <defs><linearGradient id="${id}g" x1="0" x2="1"><stop offset="0" stop-color="#FF6A2B"/><stop offset="1" stop-color="#E5251F"/></linearGradient></defs>
+    <defs><linearGradient id="${id}g" x1="0" x2="1"><stop offset="0" stop-color="#7FD8A8"/><stop offset="1" stop-color="#46B37D"/></linearGradient></defs>
     <path class="g-track" d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke-width="14" stroke-linecap="round"/>
     <path id="${id}" class="g-fill" d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="url(#${id}g)" stroke-width="14" stroke-linecap="round"
       stroke-dasharray="${c}" style="stroke-dashoffset:${c}"/>
