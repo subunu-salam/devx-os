@@ -471,3 +471,83 @@ a.kpi-link{display:block;color:inherit;text-decoration:none;cursor:pointer}
 .cmdk-empty{padding:28px;text-align:center;color:var(--muted)}
 .cmdk-foot{display:flex;gap:14px;padding:10px 14px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted)}
 @media(max-width:560px){.top-pill.cmdk-btn .tp-lbl{display:none}}
+
+/* =================== FULL EFFECTS LAYER (fx.js) =================== */
+@property --ang{syntax:'<angle>';initial-value:0deg;inherits:false}
+.fx-bg{position:fixed;inset:0;z-index:-1;pointer-events:none}
+.fx-off .fx-bg,.fx-off .fx-dot,.fx-off .fx-ring{display:none}
+
+/* glow cursor */
+.fx-dot,.fx-ring{position:fixed;left:0;top:0;pointer-events:none;z-index:120;border-radius:50%}
+.fx-dot{width:6px;height:6px;margin:-3px 0 0 -3px;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.fx-ring{width:34px;height:34px;margin:-17px 0 0 -17px;border:1.5px solid var(--accent);opacity:.55;transition:width .25s var(--ease),height .25s var(--ease),margin .25s var(--ease),opacity .25s,background .25s,border-radius .25s}
+.fx-ring.hot{width:54px;height:54px;margin:-27px 0 0 -27px;opacity:.9;background:rgba(70,179,125,.08)}
+.fx-ring.text{width:4px;height:26px;margin:-13px 0 0 -2px;border-radius:2px;background:var(--accent);opacity:.6}
+.fx-ring.down{width:24px;height:24px;margin:-12px 0 0 -12px;background:rgba(70,179,125,.25)}
+
+/* scroll progress */
+.fx-progress{position:fixed;left:0;right:0;top:0;height:2px;z-index:110;transform-origin:0 50%;transform:scaleX(0);background:var(--grad);box-shadow:0 0 10px var(--accent)}
+
+/* confetti */
+.fx-confetti{position:fixed;z-index:130;width:7px;height:10px;border-radius:2px;pointer-events:none;animation:confetti 1s cubic-bezier(.15,.7,.3,1) forwards}
+@keyframes confetti{to{transform:translate(var(--dx),calc(var(--dy) + 120px)) rotate(var(--rot));opacity:0}}
+
+/* typewriter caret */
+.fx-typing::after{content:"";display:inline-block;width:3px;height:.9em;margin-left:4px;vertical-align:-2px;background:var(--accent);animation:caret .7s steps(1) infinite}
+@keyframes caret{50%{opacity:0}}
+.tp-clock{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+
+/* page transitions + skeletons */
+.view-leave>*{animation:leaveOut .17s ease forwards}
+@keyframes leaveOut{to{opacity:0;transform:translateY(-8px);filter:blur(4px)}}
+:root:not(.fx-off) .view-enter>*{animation-name:enterIn}
+@keyframes enterIn{from{opacity:0;transform:translateY(18px) scale(.985);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+.sk{border-radius:16px;background:linear-gradient(100deg,var(--subtle) 30%,var(--card-hi) 50%,var(--subtle) 70%);background-size:300% 100%;animation:shimmer 1.2s linear infinite;border:1px solid var(--border)}
+@keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
+
+/* animated conic border on hover (cards + KPIs) */
+:root:not(.fx-off) .kpi:not(.hero-kpi):hover,:root:not(.fx-off) .dash-widgets .card:hover{
+  border-color:transparent;
+  background:linear-gradient(var(--card-solid),var(--card-solid)) padding-box,
+    conic-gradient(from var(--ang),transparent 0 55%,var(--accent) 75%,#7FD8A8 85%,transparent 100%) border-box;
+  animation:spinBorder 2.6s linear infinite}
+@keyframes spinBorder{to{--ang:360deg}}
+:root:not(.fx-off) .kpi.hero-kpi{background-size:200% 200%;animation:heroShift 8s ease-in-out infinite}
+@keyframes heroShift{0%,100%{background-position:0% 0%}50%{background-position:100% 100%}}
+:root:not(.fx-off) .kpi .ic{transition:transform .4s var(--ease)}
+:root:not(.fx-off) .kpi:hover .ic{transform:translateZ(30px) rotate(-8deg) scale(1.12)}
+:root:not(.fx-off) .kpi:hover .val{text-shadow:0 0 24px rgba(70,179,125,.35)}
+
+/* nav micro-motion */
+.fx-nav-in{animation:navIn .45s var(--ease) both}
+@keyframes navIn{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+:root:not(.fx-off) .nav a:hover svg{animation:wiggle .5s var(--ease)}
+@keyframes wiggle{30%{transform:rotate(-12deg) scale(1.15)}60%{transform:rotate(8deg) scale(1.1)}100%{transform:translateX(2px) scale(1.06)}}
+:root:not(.fx-off) .nav a.active svg{filter:drop-shadow(0 0 6px var(--accent))}
+
+/* draggable widgets */
+.dash-widgets{display:flex;flex-direction:column;gap:16px}
+.dash-widgets>[data-widget]{position:relative}
+.dash-widgets>[data-widget]>.kpi-row,.dash-widgets>[data-widget]>.dash-hero,.dash-widgets>[data-widget]>.mb16{margin-bottom:0}
+.fx-handle{position:absolute;left:-26px;top:10px;width:20px;height:28px;border:none;background:none;color:var(--muted);border-radius:6px;cursor:grab;opacity:0;transition:opacity .2s,background .2s;z-index:3;padding:0;touch-action:none}
+.fx-handle svg{width:16px;height:16px}
+.fx-handle:hover{background:var(--subtle);color:var(--accent)}
+.dash-widgets>[data-widget]:hover>.fx-handle{opacity:1}
+.fx-dragging{z-index:20;filter:drop-shadow(0 24px 40px rgba(0,0,0,.35));cursor:grabbing}
+.fx-dragging>.fx-handle{opacity:1;cursor:grabbing}
+.fx-sorting{user-select:none}
+@media(max-width:1024px){.fx-handle{left:auto;right:6px;top:-10px;opacity:.6;background:var(--card-solid);border:1px solid var(--border)}}
+
+/* expand chart */
+.fx-expand{width:30px;height:30px;border-radius:9px;border:1px solid var(--border);background:var(--card);color:var(--muted);display:inline-flex;align-items:center;justify-content:center;transition:.2s}
+.fx-expand:hover{color:var(--accent);border-color:var(--accent);transform:scale(1.08)}
+.fx-expand svg{width:15px;height:15px}
+.fx-zoom-back{position:fixed;inset:0;z-index:96;background:rgba(5,8,6,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:4vh 4vw;animation:fade .2s}
+.fx-zoom{width:100%;max-width:1200px;height:min(78vh,680px);background:var(--card-solid);border:1px solid var(--border-hi);border-radius:22px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;animation:zoomIn .4s var(--ease)}
+@keyframes zoomIn{from{opacity:0;transform:scale(.9) translateY(20px)}to{opacity:1;transform:none}}
+.fx-zoom .chart-box{flex:1;height:auto}
+
+/* effects toggle pill state */
+.top-pill.fx-toggle.on{color:var(--accent);border-color:rgba(70,179,125,.4)}
+.top-pill.fx-toggle.on svg{filter:drop-shadow(0 0 6px var(--accent))}
+@media(max-width:1200px){.tp-date{display:none!important}}

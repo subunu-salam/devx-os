@@ -41,7 +41,8 @@ export function bindPointerFx() {
     const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
     card.style.setProperty('--mx', `${x * 100}%`);
     card.style.setProperty('--my', `${y * 100}%`);
-    card.style.transform = `perspective(800px) rotateX(${(0.5 - y) * 5}deg) rotateY(${(x - 0.5) * 6}deg) translateY(-2px)`;
+    const k = document.documentElement.classList.contains('fx-off') ? 1 : 2;
+    card.style.transform = `perspective(800px) rotateX(${(0.5 - y) * 5 * k}deg) rotateY(${(x - 0.5) * 6 * k}deg) translateY(-${2 * k}px)`;
   });
   document.addEventListener('pointerout', (e) => {
     const card = e.target.closest?.('.kpi');

@@ -15,6 +15,31 @@ function vGrad(ctx, area, from, to) {
   g.addColorStop(0, from); g.addColorStop(1, to); return g;
 }
 
+const fxOn = () => !document.documentElement.classList.contains('fx-off');
+
+// Vertical crosshair + glowing line strokes (registered once).
+const fxPlugin = {
+  id: 'devxFx',
+  beforeDatasetDraw(chart, args) {
+    if (!fxOn() || chart.config.type !== 'line') return;
+    const c = chart.ctx; c.save();
+    c.shadowColor = args.meta.dataset?.options?.borderColor || '#46B37D'; c.shadowBlur = 14;
+  },
+  afterDatasetDraw(chart) { if (fxOn() && chart.config.type === 'line') chart.ctx.restore(); },
+  afterDraw(chart) {
+    const act = chart.tooltip?.getActiveElements?.();
+    if (!fxOn() || !act?.length || !chart.scales?.x || chart.config.type === 'doughnut') return;
+    const { ctx: c, chartArea: a } = chart, x = act[0].element.x;
+    c.save();
+    const g = c.createLinearGradient(0, a.top, 0, a.bottom);
+    g.addColorStop(0, 'rgba(70,179,125,0)'); g.addColorStop(.5, 'rgba(70,179,125,.7)'); g.addColorStop(1, 'rgba(70,179,125,0)');
+    c.strokeStyle = g; c.lineWidth = 1.5; c.setLineDash([4, 4]);
+    c.beginPath(); c.moveTo(x, a.top); c.lineTo(x, a.bottom); c.stroke();
+    c.restore();
+  },
+};
+let fxRegistered = false;
+
 const registry = {};
 export function getChart(id) { return registry[id]; }
 
@@ -22,6 +47,7 @@ export function makeChart(canvasId, type, data, options = {}) {
   const canvas = document.getElementById(canvasId);
   if (!canvas || typeof Chart === 'undefined') return;
   if (registry[canvasId]) { registry[canvasId].destroy(); }
+  if (!fxRegistered) { Chart.register(fxPlugin); fxRegistered = true; }
 
   const css = getComputedStyle(document.documentElement);
   const gridColor = (css.getPropertyValue('--row-border') || 'rgba(0,0,0,.06)').trim();
@@ -64,7 +90,17 @@ export function makeChart(canvasId, type, data, options = {}) {
     interaction: { mode: isPie ? 'nearest' : 'index', intersect: isPie },
     animation: isPie
       ? { animateRotate: true, animateScale: true, duration: 1100, easing: 'easeOutQuart' }
+      : (type === 'line' && fxOn()) ? {}
       : { duration: 1000, easing: 'easeOutQuart', delay: (ctx) => (ctx.type === 'data' && ctx.mode === 'default' ? ctx.dataIndex * 45 : 0) },
+    // "draws itself" line animation (point by point, left to right)
+    animations: (type === 'line' && fxOn()) ? (() => {
+      const n = data.labels?.length || 1, step = 900 / n;
+      const prevY = (ctx) => ctx.index === 0 ? ctx.chart.scales.y.getPixelForValue(0) : ctx.chart.getDatasetMeta(ctx.datasetIndex).data[ctx.index - 1].getProps(['y'], true).y;
+      return {
+        x: { type: 'number', easing: 'linear', duration: step, from: NaN, delay: (ctx) => ctx.type === 'data' && !ctx.xStarted ? (ctx.xStarted = true, ctx.index * step) : 0 },
+        y: { type: 'number', easing: 'linear', duration: step, from: prevY, delay: (ctx) => ctx.type === 'data' && !ctx.yStarted ? (ctx.yStarted = true, ctx.index * step) : 0 },
+      };
+    })() : undefined,
     cutout: isPie && type === 'doughnut' ? '72%' : undefined,
     plugins: {
       legend: { display: isPie, position: 'bottom', labels: { color: tickColor, usePointStyle: true, pointStyle: 'rectRounded', boxWidth: 8, boxHeight: 8, padding: 14, font: { family: "Inter, system-ui, sans-serif", size: 12 } } },

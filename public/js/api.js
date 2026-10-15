@@ -46,6 +46,8 @@ export function escapeHtml(s) {
 
 /* ---------- Icons (lucide-style) ---------- */
 const ICONS = {
+  sparkles: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+  maximize: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
   chevron: '<path d="M6 9l6 6 6-6"/>',
   chevronLeft: '<path d="M15 18l-6-6 6-6"/>',
   arrowUp: '<path d="M7 17L17 7M9 7h8v8"/>',

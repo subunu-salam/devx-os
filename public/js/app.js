@@ -1,6 +1,7 @@
 // DevX OS — SPA bootstrap: auth gate, app shell, hash router.
 import { api, get, post, icon, escapeHtml, toast } from './api.js';
 import { animateView, revealOnScroll, themeTransition } from './motion.js';
+import { initFx, fxOn, toggleFx, skeleton, leave, staggerNav, startClock, resetLayout } from './fx.js';
 
 import dashboard from './pages/dashboard.js';
 import meetings from './pages/meetings.js';
@@ -117,6 +118,7 @@ function roleLabel(u) {
   return u.title || u.role;
 }
 initTheme();
+initFx();
 
 init();
 
@@ -272,7 +274,8 @@ function renderShell() {
           <div class="top-actions">
             <button class="top-pill cmdk-btn" id="cmdkBtn" type="button" title="Command palette (Ctrl+K)">${icon('search')}<span class="tp-lbl">Search</span><kbd style="font-family:var(--mono);font-size:10px;border:1px solid var(--border);border-radius:5px;padding:0 5px">Ctrl K</kbd></button>
             <span class="top-pill" title="Connected"><span class="live"></span><span class="tp-lbl">Live</span></span>
-            <span class="top-pill tp-date"><span class="tp-lbl">${new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</span>${icon('calendar')}</span>
+            <span class="top-pill tp-date"><span class="tp-lbl">${new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })} · <span class="tp-clock" id="tpClock"></span></span>${icon('clock')}</span>
+            <button class="top-pill fx-toggle${fxOn() ? ' on' : ''}" id="fxToggle" type="button" title="Turn animations and effects on/off">${icon('sparkles')}<span class="tp-lbl">Effects</span></button>
             <button class="top-pill" id="topTheme" title="Toggle theme" type="button">${icon(currentTheme() === 'dark' ? 'sun' : 'moon')}</button>
           </div>
         </div>
@@ -346,12 +349,17 @@ function renderShell() {
       applyTheme(t);
       document.getElementById('topTheme').innerHTML = icon(t === 'dark' ? 'sun' : 'moon');
     });
-    setTimeout(route, 560); // redraw charts in the new palette once the reveal finishes
+    setTimeout(() => route({ soft: true }), 560); // redraw charts in the new palette once the reveal finishes
   };
   window._setTheme = setTheme;
   document.querySelectorAll('#themeToggle [data-theme-set]').forEach((b) => { b.onclick = (e) => setTheme(b.dataset.themeSet, e); });
   document.getElementById('topTheme').onclick = (e) => setTheme(currentTheme() === 'dark' ? 'light' : 'dark', e);
   document.getElementById('cmdkBtn').onclick = openPalette;
+  const fxBtn = document.getElementById('fxToggle');
+  fxBtn.onclick = () => { const on = toggleFx(); fxBtn.classList.toggle('on', on); toast(on ? 'Effects on' : 'Effects off — calm mode', on ? 'ok' : ''); };
+  window.addEventListener('fxchange', (e) => fxBtn.classList.toggle('on', e.detail));
+  startClock(document.getElementById('tpClock'));
+  staggerNav();
   applyTheme(currentTheme()); // sync active state
   window.addEventListener('resize', moveIndicator);
 }
@@ -376,7 +384,8 @@ function setCrumbs(key) {
 
 /* ---------------- Router ---------------- */
 window.addEventListener('hashchange', route);
-async function route() {
+async function route(opts) {
+  const soft = opts?.soft === true; // theme redraw: no leave animation / skeleton
   if (!currentUser) return;
   let key = (location.hash.replace(/^#\//, '') || 'dashboard').split('/')[0];
   if (!PAGES[key]) key = 'dashboard';
@@ -390,10 +399,11 @@ async function route() {
   if (g?.classList.contains('collapsed')) { g.classList.remove('collapsed'); setTimeout(moveIndicator, 380); }
   const view = document.getElementById('view');
   if (!view) return;
-  view.classList.remove('view-enter');
-  view.innerHTML = '<div class="spinner"></div>';
+  const keepY = scrollY;
+  if (!soft) { await leave(view); view.classList.remove('view-enter'); view.innerHTML = skeleton(); }
   try {
-    await PAGES[key](view, { user: currentUser, navigate: (k) => { location.hash = '#/' + k; } });
+    await PAGES[key](view, { user: currentUser, soft, navigate: (k) => { location.hash = '#/' + k; } });
+    if (soft) { scrollTo(0, keepY); return; }
     void view.offsetWidth; view.classList.add('view-enter');
     animateView(view);
     revealOnScroll(view);
@@ -417,6 +427,8 @@ function paletteItems() {
     { sec: 'Actions', label: 'Switch to dark theme', icon: 'moon', run: () => window._setTheme?.('dark') },
     { sec: 'Actions', label: 'Switch to light theme', icon: 'sun', run: () => window._setTheme?.('light') },
     { sec: 'Actions', label: 'Collapse / expand sidebar', icon: 'menu', run: () => document.getElementById('sbCollapse')?.click() },
+    { sec: 'Actions', label: fxOn() ? 'Turn effects off (calm mode)' : 'Turn effects on', icon: 'sparkles', run: () => document.getElementById('fxToggle')?.click() },
+    { sec: 'Actions', label: 'Reset dashboard layout', icon: 'dashboard', run: () => { resetLayout('devx-dash-layout'); location.hash = '#/dashboard'; route(); } },
     { sec: 'Actions', label: 'Sign out', icon: 'logout', run: () => document.getElementById('logoutBtn')?.click() },
   );
   return items;
