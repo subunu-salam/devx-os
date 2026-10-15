@@ -1,5 +1,5 @@
 // Chart.js wrappers — Raster Glass palette, gradient fills, animated entrances.
-export const PALETTE = ['#E5251F', '#FF6A2B', '#7C6CFF', '#4C8DFF', '#F2A33A', '#22B07D', '#8B8B92', '#FF8FA3'];
+export const PALETTE = ['#46B37D', '#4C8DFF', '#F2A33A', '#7C6CFF', '#169347', '#7FD8A8', '#8B8B92', '#E5484D'];
 
 export function chartCard(title, canvasId, extra = '') {
   return `<div class="card"><div class="card-head"><h3>${title}</h3>${extra}</div>
@@ -41,7 +41,7 @@ export function makeChart(canvasId, type, data, options = {}) {
       }),
       hoverBackgroundColor: type === 'bar' ? (ctx) => {
         const { chart } = ctx; if (!chart.chartArea) return c;
-        return vGrad(chart.ctx, chart.chartArea, '#FF6A2B', '#FF9A5B');
+        return vGrad(chart.ctx, chart.chartArea, '#7FD8A8', '#A6E8C4');
       } : undefined,
       borderColor: ds.borderColor || c,
       borderWidth: type === 'line' ? 2.5 : 0,
@@ -52,7 +52,7 @@ export function makeChart(canvasId, type, data, options = {}) {
       pointRadius: type === 'line' ? 0 : 0,
       pointHoverRadius: 6,
       pointHoverBorderWidth: 3,
-      pointHoverBorderColor: dark ? '#07070A' : '#fff',
+      pointHoverBorderColor: dark ? '#0A0A0A' : '#fff',
       pointBackgroundColor: c,
       maxBarThickness: 38,
       ...ds,
