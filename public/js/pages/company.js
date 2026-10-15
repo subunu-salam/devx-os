@@ -20,7 +20,7 @@ const LINKS = [
 export default async function company(view) {
   view.innerHTML = pageHead({ title: 'Company', desc: 'DevX Technologies LLC — internal reference.' }) + `
     <div class="hero mb16">
-      <img src="/assets/devx-logo-full.png" alt="DevX Technologies">
+      <img src="/assets/devx-logo-dark.png" alt="DevX Technologies">
       <div style="flex:1;min-width:220px">
         <h1>DevX Technologies LLC</h1>
         <div class="tag">Building Beyond Next — AI-Led Business Improvement</div>

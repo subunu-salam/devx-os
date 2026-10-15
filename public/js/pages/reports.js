@@ -57,7 +57,7 @@ export default async function reports(view) {
     view.querySelector('#report').innerHTML = `
       <div class="card" id="printArea">
         <div class="card-pad" style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)">
-          <div style="display:flex;align-items:center;gap:12px"><img src="/assets/devx-logo-full.png" style="height:34px"><div><strong>${cfg.label} Report</strong><div class="muted" style="font-size:12px">${moSel.options[moSel.selectedIndex].text} · ${rows.length} records${totalMoney != null ? ' · ' + fmtAED(totalMoney) : ''}</div></div></div>
+          <div style="display:flex;align-items:center;gap:12px"><img class="logo-light" src="/assets/devx-logo-full.png" alt="DevX Technologies" style="height:34px"><img class="logo-dark" src="/assets/devx-logo-dark.png" alt="DevX Technologies" style="height:34px"><div><strong>${cfg.label} Report</strong><div class="muted" style="font-size:12px">${moSel.options[moSel.selectedIndex].text} · ${rows.length} records${totalMoney != null ? ' · ' + fmtAED(totalMoney) : ''}</div></div></div>
           <div class="muted" style="font-size:12px">DevX Technologies LLC</div>
         </div>
         <div class="table-wrap" style="border:none;box-shadow:none">

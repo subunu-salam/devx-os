@@ -154,7 +154,7 @@ function renderLogin() {
       <section class="login-side">
         <div class="login-glow a"></div><div class="login-glow b"></div>
         <div class="login-card">
-          <img class="logo" src="/assets/devx-logo-full.png" alt="DevX Technologies" />
+          <img class="logo logo-light" src="/assets/devx-logo-full.png" alt="DevX Technologies" /><img class="logo logo-dark" src="/assets/devx-logo-dark.png" alt="DevX Technologies" />
           <h1>DevX OS</h1>
           <p class="sub">Internal business management platform</p>
           <form id="loginForm" style="margin-top:26px">
