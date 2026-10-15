@@ -13,9 +13,10 @@ pg.types.setTypeParser(1700, (v) => (v === null ? null : parseFloat(v)));   // n
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Uploaded receipts/attachments still live on the local disk.
+// On Vercel the deploy is read-only, so fall back to /tmp (uploads there are NOT permanent).
 export const DATA_DIR = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
-  : path.join(__dirname, '..', 'data');
+  : process.env.VERCEL ? '/tmp/devx-data' : path.join(__dirname, '..', 'data');
 export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -31,7 +32,7 @@ const isLocal = /localhost|127\.0\.0\.1/.test(DATABASE_URL);
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: isLocal ? false : { rejectUnauthorized: false },
-  max: 10,
+  max: process.env.VERCEL ? 3 : 10,
 });
 
 // During a transaction all queries route through this dedicated client.
