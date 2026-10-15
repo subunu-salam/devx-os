@@ -1,5 +1,6 @@
 // DevX OS — SPA bootstrap: auth gate, app shell, hash router.
 import { api, get, post, icon, escapeHtml, toast } from './api.js';
+import { animateView } from './motion.js';
 
 import dashboard from './pages/dashboard.js';
 import meetings from './pages/meetings.js';
@@ -102,7 +103,7 @@ window.addEventListener('unauthorized', () => { currentUser = null; renderLogin(
 /* ---------------- Theme ---------------- */
 function initTheme() {
   let t; try { t = localStorage.getItem('devx-theme'); } catch {}
-  if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  if (!t) t = 'dark'; // glass theme is designed dark-first
   document.documentElement.setAttribute('data-theme', t);
 }
 function applyTheme(t) {
@@ -133,22 +134,39 @@ async function init() {
 /* ---------------- Login ---------------- */
 function renderLogin() {
   document.body.classList.remove('shell');
+  const bars = [38, 52, 44, 66, 58, 74, 62, 88, 70, 96, 80, 64];
   appEl().innerHTML = `
     <div class="login-wrap">
-      <div class="login-glow a"></div><div class="login-glow b"></div>
-      <div class="login-card">
-        <img class="logo" src="/assets/devx-logo-full.png" alt="DevX Technologies" />
-        <h1>DevX OS</h1>
-        <p class="sub">Internal business management platform</p>
-        <form id="loginForm" style="margin-top:26px">
-          <div class="field"><label>Work email</label>
-            <input class="input" type="email" id="email" placeholder="you@devxpert.ae" autocomplete="email" required></div>
-          <div class="field"><label>Password</label>
-            <input class="input" type="password" id="password" placeholder="••••••••" autocomplete="current-password" required></div>
-          <button class="btn btn-primary" style="width:100%;height:44px" type="submit" id="loginBtn">Sign in</button>
-        </form>
-        <p class="login-note">${icon('lock')} Invite-only access for the DevX Technologies team</p>
-      </div>
+      <section class="login-art">
+        <div class="eyebrow">DevX Technologies — Business OS</div>
+        <div>
+          <h2>Run the whole <em>business</em> from one place.</h2>
+          <div class="login-bars" style="margin-top:40px">
+            ${bars.map((h, i) => `<span class="${i === 9 ? 'hot' : ''}" style="height:${h}%;animation-delay:${i * 60}ms"></span>`).join('')}
+          </div>
+        </div>
+        <div class="login-meta">
+          <div><b>CRM</b>Leads · Deals</div>
+          <div><b>Books</b>Sales · Purchases</div>
+          <div><b>Reports</b>P&amp;L · VAT</div>
+        </div>
+      </section>
+      <section class="login-side">
+        <div class="login-glow a"></div><div class="login-glow b"></div>
+        <div class="login-card">
+          <img class="logo" src="/assets/devx-logo-full.png" alt="DevX Technologies" />
+          <h1>DevX OS</h1>
+          <p class="sub">Internal business management platform</p>
+          <form id="loginForm" style="margin-top:26px">
+            <div class="field"><label>Work email</label>
+              <input class="input" type="email" id="email" placeholder="you@devxpert.ae" autocomplete="email" required></div>
+            <div class="field"><label>Password</label>
+              <input class="input" type="password" id="password" placeholder="••••••••" autocomplete="current-password" required></div>
+            <button class="btn btn-primary" style="width:100%;height:46px" type="submit" id="loginBtn">Sign in</button>
+          </form>
+          <p class="login-note">${icon('lock')} Invite-only access for the DevX Technologies team</p>
+        </div>
+      </section>
     </div>`;
   document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -172,14 +190,54 @@ function renderLogin() {
 }
 
 /* ---------------- Shell ---------------- */
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+function buildNav(filter = '') {
+  const q = filter.trim().toLowerCase();
+  const collapsedGroups = lsGet('devx-nav-groups', {});
+  const groups = [];
+  NAV.forEach((n) => {
+    if (n.group) groups.push({ name: n.group, items: [] });
+    else if (!(n.adminOnly && currentUser.role !== 'admin')) groups[groups.length - 1].items.push(n);
+  });
+  const mark = (label) => {
+    if (!q) return escapeHtml(label);
+    const i = label.toLowerCase().indexOf(q);
+    if (i < 0) return escapeHtml(label);
+    return escapeHtml(label.slice(0, i)) + '<mark>' + escapeHtml(label.slice(i, i + q.length)) + '</mark>' + escapeHtml(label.slice(i + q.length));
+  };
+  let html = '', count = 0;
+  groups.forEach((g) => {
+    const items = q ? g.items.filter((n) => n.label.toLowerCase().includes(q) || g.name.toLowerCase().includes(q)) : g.items;
+    if (!items.length) return;
+    count += items.length;
+    const collapsed = !q && collapsedGroups[g.name];
+    html += `<button class="nav-group${collapsed ? ' collapsed' : ''}" data-group="${g.name}" type="button">${g.name}${icon('chevron')}</button>
+      <div class="nav-items"><div>${items.map((n) =>
+        `<a href="#/${n.key}" data-nav="${n.key}" data-label="${escapeHtml(n.label)}">${icon(n.icon)}<span class="nav-lbl">${mark(n.label)}</span></a>`).join('')}</div></div>`;
+  });
+  if (!count) html = `<div class="nav-empty">No modules match “${escapeHtml(filter)}”</div>`;
+  return '<div class="nav-indicator" id="navInd"></div>' + html;
+}
+
+function moveIndicator() {
+  const ind = document.getElementById('navInd');
+  const nav = document.getElementById('nav');
+  const a = nav?.querySelector('a.active');
+  if (!ind || !a) { if (ind) ind.style.opacity = 0; return; }
+  // hidden inside a collapsed group?
+  const wrap = a.closest('.nav-items');
+  const hidden = wrap && wrap.previousElementSibling?.classList.contains('collapsed') && !document.documentElement.classList.contains('sb-collapsed');
+  if (hidden) { ind.style.opacity = 0; return; }
+  ind.style.opacity = 1;
+  ind.style.transform = `translateY(${a.offsetTop + (a.offsetParent === nav ? 0 : a.offsetParent.offsetTop)}px)`;
+}
+
 function renderShell() {
   document.body.classList.add('shell');
+  document.documentElement.classList.toggle('sb-collapsed', !!lsGet('devx-sb-collapsed', false));
   const initials = (currentUser.full_name || 'U').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
-  const navHtml = NAV.map((n) => {
-    if (n.group) return `<div class="nav-group">${n.group}</div>`;
-    if (n.adminOnly && currentUser.role !== 'admin') return '';
-    return `<a href="#/${n.key}" data-nav="${n.key}">${icon(n.icon)}<span>${n.label}</span></a>`;
-  }).join('');
 
   appEl().innerHTML = `
     <div class="shell">
@@ -187,20 +245,22 @@ function renderShell() {
         <div class="sidebar-brand">
           <img src="/assets/devx-mark-green.png" alt="DevX" />
           <div><div class="t">DevX OS</div><div class="s">Technologies</div></div>
+          <button class="sb-collapse" id="sbCollapse" title="Collapse sidebar" type="button">${icon('chevronLeft')}</button>
         </div>
-        <nav class="nav">${navHtml}</nav>
+        <div class="sb-search">${icon('search')}<input id="navSearch" placeholder="Jump to module…" autocomplete="off"><kbd>/</kbd></div>
+        <nav class="nav" id="nav">${buildNav()}</nav>
         <div class="sidebar-foot">
           <div class="sidebar-theme">
             <div class="theme-toggle" id="themeToggle">
-              <button data-theme-set="light">${icon('sun')} Light</button>
-              <button data-theme-set="dark">${icon('moon')} Dark</button>
+              <button data-theme-set="light" title="Light">${icon('sun')}<span>Light</span></button>
+              <button data-theme-set="dark" title="Dark">${icon('moon')}<span>Dark</span></button>
             </div>
           </div>
           <div class="sidebar-user">
             <div class="avatar">${initials}</div>
             <div style="flex:1;min-width:0"><div class="nm">${escapeHtml(currentUser.full_name)}</div>
               <div class="rl">${escapeHtml(roleLabel(currentUser))}</div></div>
-            <button class="btn btn-ghost btn-icon" id="logoutBtn" title="Sign out" style="color:rgba(255,255,255,.6)">${icon('logout')}</button>
+            <button class="btn btn-ghost btn-icon" id="logoutBtn" title="Sign out">${icon('logout')}</button>
           </div>
         </div>
       </aside>
@@ -208,6 +268,12 @@ function renderShell() {
         <div class="topbar">
           <button class="btn btn-ghost btn-icon" id="menuBtn">${icon('menu')}</button>
           <img src="/assets/devx-mark-green.png" alt="DevX" /><span class="t">DevX OS</span>
+          <div class="crumbs" id="crumbs"></div>
+          <div class="top-actions">
+            <span class="top-pill" title="Connected"><span class="live"></span><span class="tp-lbl">Live</span></span>
+            <span class="top-pill tp-date"><span class="tp-lbl">${new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</span>${icon('calendar')}</span>
+            <button class="top-pill" id="topTheme" title="Toggle theme" type="button">${icon(currentTheme() === 'dark' ? 'sun' : 'moon')}</button>
+          </div>
         </div>
         <div class="content" id="view"><div class="spinner"></div></div>
       </div>
@@ -218,16 +284,69 @@ function renderShell() {
     currentUser = null; location.hash = ''; renderLogin();
   };
   const sidebar = document.getElementById('sidebar');
+  const nav = document.getElementById('nav');
   const openMenu = () => { sidebar.classList.add('open'); addBackdrop(); };
   const closeMenu = () => { sidebar.classList.remove('open'); removeBackdrop(); };
   document.getElementById('menuBtn').onclick = openMenu;
   sidebar.addEventListener('click', (e) => { if (e.target.closest('[data-nav]')) closeMenu(); });
   window._closeMenu = closeMenu;
 
-  document.querySelectorAll('#themeToggle [data-theme-set]').forEach((b) => {
-    b.onclick = () => { applyTheme(b.dataset.themeSet); route(); };
+  // Collapsible groups
+  nav.addEventListener('click', (e) => {
+    const g = e.target.closest('[data-group]');
+    if (!g) return;
+    g.classList.toggle('collapsed');
+    const state = lsGet('devx-nav-groups', {});
+    state[g.dataset.group] = g.classList.contains('collapsed');
+    lsSet('devx-nav-groups', state);
+    moveIndicator(); setTimeout(moveIndicator, 380);
   });
+
+  // Rail collapse
+  document.getElementById('sbCollapse').onclick = () => {
+    const c = !document.documentElement.classList.contains('sb-collapsed');
+    document.documentElement.classList.toggle('sb-collapsed', c);
+    lsSet('devx-sb-collapsed', c);
+    setTimeout(() => { moveIndicator(); window.dispatchEvent(new Event('resize')); }, 380);
+  };
+
+  // Tooltips in rail mode
+  const tip = document.createElement('div'); tip.className = 'nav-tip'; document.body.appendChild(tip);
+  nav.addEventListener('mouseover', (e) => {
+    const a = e.target.closest('a[data-nav]');
+    if (!a || !document.documentElement.classList.contains('sb-collapsed')) return;
+    const r = a.getBoundingClientRect();
+    tip.textContent = a.dataset.label; tip.style.left = (r.right + 12) + 'px'; tip.style.top = (r.top + r.height / 2 - 14) + 'px';
+    tip.classList.add('show');
+  });
+  nav.addEventListener('mouseout', () => tip.classList.remove('show'));
+  nav.addEventListener('scroll', () => tip.classList.remove('show'));
+
+  // Module search (+ keyboard: "/" focus, Enter opens first match, Esc clears)
+  const search = document.getElementById('navSearch');
+  search.addEventListener('input', () => { nav.innerHTML = buildNav(search.value); syncActive(); });
+  search.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { const a = nav.querySelector('a[data-nav]'); if (a) { location.hash = a.getAttribute('href'); search.value = ''; nav.innerHTML = buildNav(); syncActive(); search.blur(); closeMenu(); } }
+    if (e.key === 'Escape') { search.value = ''; nav.innerHTML = buildNav(); syncActive(); search.blur(); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) {
+      e.preventDefault();
+      if (document.documentElement.classList.contains('sb-collapsed')) document.getElementById('sbCollapse').click();
+      if (window.innerWidth <= 1024) openMenu();
+      search.focus();
+    }
+  });
+
+  const setTheme = (t) => {
+    applyTheme(t);
+    document.getElementById('topTheme').innerHTML = icon(t === 'dark' ? 'sun' : 'moon');
+    route();
+  };
+  document.querySelectorAll('#themeToggle [data-theme-set]').forEach((b) => { b.onclick = () => setTheme(b.dataset.themeSet); });
+  document.getElementById('topTheme').onclick = () => setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
   applyTheme(currentTheme()); // sync active state
+  window.addEventListener('resize', moveIndicator);
 }
 function addBackdrop() {
   if (document.querySelector('.backdrop')) return;
@@ -236,6 +355,18 @@ function addBackdrop() {
 }
 function removeBackdrop() { document.querySelector('.backdrop')?.remove(); }
 
+let activeKey = 'dashboard';
+function syncActive() {
+  document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === activeKey));
+  requestAnimationFrame(moveIndicator);
+}
+function setCrumbs(key) {
+  const el = document.getElementById('crumbs');
+  if (!el) return;
+  let group = '';
+  for (const n of NAV) { if (n.group) group = n.group; else if (n.key === key) { el.innerHTML = `<span>DevX OS</span><i></i><span>${group}</span><i></i><b>${escapeHtml(n.label)}</b>`; return; } }
+}
+
 /* ---------------- Router ---------------- */
 window.addEventListener('hashchange', route);
 async function route() {
@@ -243,12 +374,21 @@ async function route() {
   let key = (location.hash.replace(/^#\//, '') || 'dashboard').split('/')[0];
   if (!PAGES[key]) key = 'dashboard';
   if (key === 'activity' && currentUser.role !== 'admin') key = 'dashboard';
-  document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === key));
+  activeKey = key;
+  syncActive();
+  setCrumbs(key);
+  // make sure the active module's group is expanded
+  const a = document.querySelector(`#nav a[data-nav="${key}"]`);
+  const g = a?.closest('.nav-items')?.previousElementSibling;
+  if (g?.classList.contains('collapsed')) { g.classList.remove('collapsed'); setTimeout(moveIndicator, 380); }
   const view = document.getElementById('view');
   if (!view) return;
+  view.classList.remove('view-enter');
   view.innerHTML = '<div class="spinner"></div>';
   try {
     await PAGES[key](view, { user: currentUser, navigate: (k) => { location.hash = '#/' + k; } });
+    void view.offsetWidth; view.classList.add('view-enter');
+    animateView(view);
   } catch (err) {
     if (err.message !== 'Not authenticated') {
       view.innerHTML = `<div class="empty">${icon('x')}<p>Could not load this page.</p><p class="muted">${escapeHtml(err.message)}</p></div>`;
