@@ -102,7 +102,8 @@ h1,h2,h3,h4{margin:0;font-family:var(--display);font-weight:700;letter-spacing:-
 .login-glow.b{width:360px;height:360px;bottom:-160px;left:30%;opacity:.2;background:radial-gradient(circle,var(--violet),transparent 70%);animation-delay:-6s}
 .login-card{position:relative;width:100%;max-width:410px;background:var(--card);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid var(--border);border-radius:24px;padding:40px;box-shadow:var(--shadow-lg);animation:rise .6s var(--ease) both}
 .login-card img.logo{display:block;margin:0 auto;height:64px;object-fit:contain}
-:root[data-theme="dark"] .login-card img.logo{filter:brightness(0) invert(1)}
+/* Theme-aware brand logo: black wordmark on light, white wordmark on dark (green mark kept in both) */
+:root:not([data-theme="dark"]) .logo-dark,:root[data-theme="dark"] .logo-light{display:none!important}
 .login-card h1{text-align:center;font-size:26px;margin-top:18px}
 .login-card .sub{text-align:center;color:var(--muted);margin-top:4px;font-size:13px}
 .login-note{display:flex;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:12px;margin-top:22px}
@@ -309,7 +310,7 @@ table.data tbody tr:hover td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
 /* ---------- Company / misc ---------- */
 .hero{background:linear-gradient(120deg,#0A0A0E,#0D1712 60%,#0B3A22);color:#fff;border-radius:var(--radius);padding:34px;display:flex;align-items:center;gap:22px;flex-wrap:wrap;border:1px solid var(--border);position:relative;overflow:hidden}
 .hero::after{content:"";position:absolute;right:-80px;top:-80px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(70,179,125,.45),transparent 70%)}
-.hero img{height:60px;filter:brightness(0) invert(1)}
+.hero img{height:60px}
 .hero h1{font-size:28px;color:#fff}
 .hero .tag{color:#6FD3A0;font-weight:600;margin-top:6px}
 .svc{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
@@ -401,6 +402,7 @@ table.data tbody tr:hover td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
   .sidebar,.topbar,.page-head .actions,.no-print{display:none!important}
   .main{margin:0!important}.content{padding:0}
   body{background:#fff}body::before,body::after{display:none}
+  .logo-dark{display:none!important}.logo-light{display:inline!important}
 }
 
 /* ---------- Responsive ---------- */
