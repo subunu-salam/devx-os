@@ -1,6 +1,6 @@
 // DevX OS — SPA bootstrap: auth gate, app shell, hash router.
 import { api, get, post, icon, escapeHtml, toast } from './api.js';
-import { animateView } from './motion.js';
+import { animateView, revealOnScroll, themeTransition } from './motion.js';
 
 import dashboard from './pages/dashboard.js';
 import meetings from './pages/meetings.js';
@@ -270,6 +270,7 @@ function renderShell() {
           <img src="/assets/devx-mark-green.png" alt="DevX" /><span class="t">DevX OS</span>
           <div class="crumbs" id="crumbs"></div>
           <div class="top-actions">
+            <button class="top-pill cmdk-btn" id="cmdkBtn" type="button" title="Command palette (Ctrl+K)">${icon('search')}<span class="tp-lbl">Search</span><kbd style="font-family:var(--mono);font-size:10px;border:1px solid var(--border);border-radius:5px;padding:0 5px">Ctrl K</kbd></button>
             <span class="top-pill" title="Connected"><span class="live"></span><span class="tp-lbl">Live</span></span>
             <span class="top-pill tp-date"><span class="tp-lbl">${new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</span>${icon('calendar')}</span>
             <button class="top-pill" id="topTheme" title="Toggle theme" type="button">${icon(currentTheme() === 'dark' ? 'sun' : 'moon')}</button>
@@ -338,13 +339,19 @@ function renderShell() {
     }
   });
 
-  const setTheme = (t) => {
-    applyTheme(t);
-    document.getElementById('topTheme').innerHTML = icon(t === 'dark' ? 'sun' : 'moon');
-    route();
+  const setTheme = (t, ev) => {
+    if (t === currentTheme()) return;
+    const x = ev?.clientX ?? innerWidth - 40, y = ev?.clientY ?? 30;
+    themeTransition(x, y, () => {
+      applyTheme(t);
+      document.getElementById('topTheme').innerHTML = icon(t === 'dark' ? 'sun' : 'moon');
+    });
+    setTimeout(route, 560); // redraw charts in the new palette once the reveal finishes
   };
-  document.querySelectorAll('#themeToggle [data-theme-set]').forEach((b) => { b.onclick = () => setTheme(b.dataset.themeSet); });
-  document.getElementById('topTheme').onclick = () => setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
+  window._setTheme = setTheme;
+  document.querySelectorAll('#themeToggle [data-theme-set]').forEach((b) => { b.onclick = (e) => setTheme(b.dataset.themeSet, e); });
+  document.getElementById('topTheme').onclick = (e) => setTheme(currentTheme() === 'dark' ? 'light' : 'dark', e);
+  document.getElementById('cmdkBtn').onclick = openPalette;
   applyTheme(currentTheme()); // sync active state
   window.addEventListener('resize', moveIndicator);
 }
@@ -389,9 +396,71 @@ async function route() {
     await PAGES[key](view, { user: currentUser, navigate: (k) => { location.hash = '#/' + k; } });
     void view.offsetWidth; view.classList.add('view-enter');
     animateView(view);
+    revealOnScroll(view);
   } catch (err) {
     if (err.message !== 'Not authenticated') {
       view.innerHTML = `<div class="empty">${icon('x')}<p>Could not load this page.</p><p class="muted">${escapeHtml(err.message)}</p></div>`;
     }
   }
 }
+
+/* ---------------- Command palette (Ctrl/Cmd + K) ---------------- */
+function paletteItems() {
+  const items = [];
+  let group = '';
+  for (const n of NAV) {
+    if (n.group) { group = n.group; continue; }
+    if (n.adminOnly && currentUser?.role !== 'admin') continue;
+    items.push({ sec: 'Go to', label: n.label, hint: group, icon: n.icon, run: () => { location.hash = '#/' + n.key; } });
+  }
+  items.push(
+    { sec: 'Actions', label: 'Switch to dark theme', icon: 'moon', run: () => window._setTheme?.('dark') },
+    { sec: 'Actions', label: 'Switch to light theme', icon: 'sun', run: () => window._setTheme?.('light') },
+    { sec: 'Actions', label: 'Collapse / expand sidebar', icon: 'menu', run: () => document.getElementById('sbCollapse')?.click() },
+    { sec: 'Actions', label: 'Sign out', icon: 'logout', run: () => document.getElementById('logoutBtn')?.click() },
+  );
+  return items;
+}
+function openPalette() {
+  if (!currentUser || document.querySelector('.cmdk-back')) return;
+  const all = paletteItems();
+  const back = document.createElement('div');
+  back.className = 'cmdk-back';
+  back.innerHTML = `<div class="cmdk" role="dialog" aria-label="Command palette">
+    <div class="cmdk-in">${icon('search')}<input placeholder="Search modules and actions…" autocomplete="off"><kbd>Esc</kbd></div>
+    <div class="cmdk-list"></div>
+    <div class="cmdk-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> navigate</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div></div>`;
+  document.body.appendChild(back);
+  const input = back.querySelector('input'), list = back.querySelector('.cmdk-list');
+  let shown = [], sel = 0;
+  const close = () => back.remove();
+  const render = () => {
+    const q = input.value.trim().toLowerCase();
+    shown = q ? all.filter((i) => (i.label + ' ' + (i.hint || '')).toLowerCase().includes(q)) : all;
+    sel = Math.min(sel, Math.max(0, shown.length - 1));
+    if (!shown.length) { list.innerHTML = `<div class="cmdk-empty">No results for “${escapeHtml(input.value)}”</div>`; return; }
+    let html = '', sec = '';
+    shown.forEach((it, i) => {
+      if (it.sec !== sec) { sec = it.sec; html += `<div class="cmdk-sec">${sec}</div>`; }
+      html += `<button class="cmdk-item${i === sel ? ' sel' : ''}" data-i="${i}" type="button">${icon(it.icon)}<span>${escapeHtml(it.label)}</span>${it.hint ? `<small>${escapeHtml(it.hint)}</small>` : ''}</button>`;
+    });
+    list.innerHTML = html;
+    list.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
+  };
+  const run = (i) => { const it = shown[i]; if (!it) return; close(); it.run(); };
+  input.addEventListener('input', () => { sel = 0; render(); });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = (sel + 1) % Math.max(1, shown.length); render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = (sel - 1 + shown.length) % Math.max(1, shown.length); render(); }
+    else if (e.key === 'Enter') { e.preventDefault(); run(sel); }
+    else if (e.key === 'Escape') close();
+  });
+  list.addEventListener('mousemove', (e) => { const b = e.target.closest('[data-i]'); if (b && Number(b.dataset.i) !== sel) { sel = Number(b.dataset.i); list.querySelectorAll('.cmdk-item').forEach((x) => x.classList.toggle('sel', x === b)); } });
+  list.addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (b) run(Number(b.dataset.i)); });
+  back.addEventListener('mousedown', (e) => { if (e.target === back) close(); });
+  render();
+  input.focus();
+}
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); }
+});

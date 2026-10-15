@@ -17,15 +17,15 @@ export default async function dashboard(view, ctx) {
     actions: `<button class="btn btn-outline" id="qMeet">${icon('calendar')} Schedule Meeting</button>
               <button class="btn btn-primary" id="qExp">${icon('plus')} Add Expense</button>`,
   }) + kpiRow([
-    { label: 'Net profit', value: fmtAED(k.netProfit ?? 0), sub: `Income ${fmtAED(income)} · Exp ${fmtAED(spend)}`, icon: 'trending', tone: 'hero-kpi' },
-    { label: 'Cash & bank', value: fmtAED(k.cashBank ?? 0), sub: `Net worth ${fmtAED(k.netPosition || 0)}`, icon: 'wallet', tone: 'green' },
-    { label: 'Receivables', value: fmtAED(k.receivables ?? 0), sub: `Payables ${fmtAED(k.payables || 0)}`, icon: 'invoice', tone: 'amber' },
-    { label: 'Pipeline', value: fmtAED(k.pipelineValue ?? 0), sub: `${k.openDeals || 0} open deals`, icon: 'target' },
+    { label: 'Net profit', href: '#/financials', value: fmtAED(k.netProfit ?? 0), sub: `Income ${fmtAED(income)} · Exp ${fmtAED(spend)}`, icon: 'trending', tone: 'hero-kpi' },
+    { label: 'Cash & bank', href: '#/banking', value: fmtAED(k.cashBank ?? 0), sub: `Net worth ${fmtAED(k.netPosition || 0)}`, icon: 'wallet', tone: 'green' },
+    { label: 'Receivables', href: '#/invoices', value: fmtAED(k.receivables ?? 0), sub: `Payables ${fmtAED(k.payables || 0)}`, icon: 'invoice', tone: 'amber' },
+    { label: 'Pipeline', href: '#/deals', value: fmtAED(k.pipelineValue ?? 0), sub: `${k.openDeals || 0} open deals`, icon: 'target' },
   ]) + kpiRow([
-    { label: 'Meetings this month', value: k.monthMeetings, sub: `${k.totalMeetings} all time`, icon: 'calendar' },
-    { label: 'Expenses this month', value: fmtAED(k.monthExpenses), sub: `${fmtAED(k.totalExpenses)} all time`, icon: 'receipt', tone: 'amber' },
-    { label: 'VAT payable', value: fmtAED(k.vatPayable ?? 0), sub: 'Output − input VAT', icon: 'ledger' },
-    { label: 'Active leads', value: k.interestedLeads, sub: `${k.leads} total · ${k.wonLeads} won`, icon: 'leads' },
+    { label: 'Meetings this month', href: '#/meetings', value: k.monthMeetings, sub: `${k.totalMeetings} all time`, icon: 'calendar' },
+    { label: 'Expenses this month', href: '#/expenses', value: fmtAED(k.monthExpenses), sub: `${fmtAED(k.totalExpenses)} all time`, icon: 'receipt', tone: 'amber' },
+    { label: 'VAT payable', href: '#/financials', value: fmtAED(k.vatPayable ?? 0), sub: 'Output − input VAT', icon: 'ledger' },
+    { label: 'Active leads', href: '#/leads', value: k.interestedLeads, sub: `${k.leads} total · ${k.wonLeads} won`, icon: 'leads' },
   ]) + `
     <div class="dash-hero">
       <div class="card">
@@ -102,6 +102,9 @@ export default async function dashboard(view, ctx) {
     makeChart('dMonth', type, {
       labels: rows.map((r) => new Date(r.ym + '-01').toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })),
       datasets: [{ label: 'AED', data: rows.map((r) => r.total) }],
+    }, {
+      onClick: (_e, els) => { if (els.length) ctx.navigate('expenses'); },
+      onHover: (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
     });
   };
   const seg = (id, fn) => view.querySelector(id).addEventListener('click', (e) => {
@@ -123,7 +126,9 @@ export default async function dashboard(view, ctx) {
   };
   makeChart('dStatus', 'doughnut', { labels: ms.map((r) => r.status), datasets: [{ data: ms.map((r) => r.n) }] }, {
     plugins: { legend: { display: false } },
-    onHover: (_e, els) => {
+    onClick: (_e, els) => { if (els.length) ctx.navigate('meetings'); },
+    onHover: (e, els) => {
+      e.native.target.style.cursor = els.length ? 'pointer' : 'default';
       if (els.length) { const i = els[0].index; totEl.textContent = ms[i].n; lblEl.textContent = ms[i].status; }
       else resetCenter();
     },
