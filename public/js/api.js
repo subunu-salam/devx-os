@@ -46,6 +46,11 @@ export function escapeHtml(s) {
 
 /* ---------- Icons (lucide-style) ---------- */
 const ICONS = {
+  chevron: '<path d="M6 9l6 6 6-6"/>',
+  chevronLeft: '<path d="M15 18l-6-6 6-6"/>',
+  arrowUp: '<path d="M7 17L17 7M9 7h8v8"/>',
+  arrowDown: '<path d="M7 7l10 10M17 9v8H9"/>',
+  bell: '<path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"/>',
   dashboard: '<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8M8 11h8M8 15h5"/>',
