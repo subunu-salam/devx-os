@@ -10,12 +10,13 @@ export function pageHead({ title, desc, actions = '' }) {
 
 export function kpiRow(cards) {
   return `<div class="kpi-row">` + cards.map((c) => `
-    <div class="kpi ${c.tone || ''}">
+    <${c.href ? `a href="${c.href}"` : 'div'} class="kpi ${c.tone || ''}${c.href ? ' kpi-link' : ''}">
       <div class="ic">${icon(c.icon || 'activity')}</div>
+      ${c.href ? `<span class="kpi-go">${icon('arrowUp')}</span>` : ''}
       <div class="lbl">${escapeHtml(c.label)}</div>
       <div class="val">${c.value}</div>
       ${c.sub ? `<div class="sub">${escapeHtml(c.sub)}</div>` : ''}
-    </div>`).join('') + `</div>`;
+    </${c.href ? 'a' : 'div'}>`).join('') + `</div>`;
 }
 
 export function emptyState(msg, iconName = 'inbox') {

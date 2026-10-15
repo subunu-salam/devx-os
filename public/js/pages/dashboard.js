@@ -2,6 +2,7 @@ import { get, icon, fmtAED, fmtDate, badge, escapeHtml } from '../api.js';
 import { pageHead, kpiRow } from '../ui.js';
 import { makeChart, getChart, PALETTE } from '../charts.js';
 import { countUp } from '../motion.js';
+import { sortable, typewrite } from '../fx.js';
 
 export default async function dashboard(view, ctx) {
   const d = await get('/api/dashboard');
@@ -16,24 +17,25 @@ export default async function dashboard(view, ctx) {
     desc: 'Your DevX Technologies operations at a glance.',
     actions: `<button class="btn btn-outline" id="qMeet">${icon('calendar')} Schedule Meeting</button>
               <button class="btn btn-primary" id="qExp">${icon('plus')} Add Expense</button>`,
-  }) + kpiRow([
-    { label: 'Net profit', value: fmtAED(k.netProfit ?? 0), sub: `Income ${fmtAED(income)} · Exp ${fmtAED(spend)}`, icon: 'trending', tone: 'hero-kpi' },
-    { label: 'Cash & bank', value: fmtAED(k.cashBank ?? 0), sub: `Net worth ${fmtAED(k.netPosition || 0)}`, icon: 'wallet', tone: 'green' },
-    { label: 'Receivables', value: fmtAED(k.receivables ?? 0), sub: `Payables ${fmtAED(k.payables || 0)}`, icon: 'invoice', tone: 'amber' },
-    { label: 'Pipeline', value: fmtAED(k.pipelineValue ?? 0), sub: `${k.openDeals || 0} open deals`, icon: 'target' },
-  ]) + kpiRow([
-    { label: 'Meetings this month', value: k.monthMeetings, sub: `${k.totalMeetings} all time`, icon: 'calendar' },
-    { label: 'Expenses this month', value: fmtAED(k.monthExpenses), sub: `${fmtAED(k.totalExpenses)} all time`, icon: 'receipt', tone: 'amber' },
-    { label: 'VAT payable', value: fmtAED(k.vatPayable ?? 0), sub: 'Output − input VAT', icon: 'ledger' },
-    { label: 'Active leads', value: k.interestedLeads, sub: `${k.leads} total · ${k.wonLeads} won`, icon: 'leads' },
-  ]) + `
-    <div class="dash-hero">
+  }) + `<div class="dash-widgets" id="dashW"><div data-widget="kpi1">` + kpiRow([
+    { label: 'Net profit', href: '#/financials', value: fmtAED(k.netProfit ?? 0), sub: `Income ${fmtAED(income)} · Exp ${fmtAED(spend)}`, icon: 'trending', tone: 'hero-kpi' },
+    { label: 'Cash & bank', href: '#/banking', value: fmtAED(k.cashBank ?? 0), sub: `Net worth ${fmtAED(k.netPosition || 0)}`, icon: 'wallet', tone: 'green' },
+    { label: 'Receivables', href: '#/invoices', value: fmtAED(k.receivables ?? 0), sub: `Payables ${fmtAED(k.payables || 0)}`, icon: 'invoice', tone: 'amber' },
+    { label: 'Pipeline', href: '#/deals', value: fmtAED(k.pipelineValue ?? 0), sub: `${k.openDeals || 0} open deals`, icon: 'target' },
+  ]) + `</div><div data-widget="kpi2">` + kpiRow([
+    { label: 'Meetings this month', href: '#/meetings', value: k.monthMeetings, sub: `${k.totalMeetings} all time`, icon: 'calendar' },
+    { label: 'Expenses this month', href: '#/expenses', value: fmtAED(k.monthExpenses), sub: `${fmtAED(k.totalExpenses)} all time`, icon: 'receipt', tone: 'amber' },
+    { label: 'VAT payable', href: '#/financials', value: fmtAED(k.vatPayable ?? 0), sub: 'Output − input VAT', icon: 'ledger' },
+    { label: 'Active leads', href: '#/leads', value: k.interestedLeads, sub: `${k.leads} total · ${k.wonLeads} won`, icon: 'leads' },
+  ]) + `</div>
+    <div data-widget="hero"><div class="dash-hero">
       <div class="card">
         <div class="card-head">
           <div><h3>Monthly expenses</h3><div class="muted" style="font-size:12px;margin-top:2px" id="mSub"></div></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <div class="seg" id="mRange"><button data-r="6">6M</button><button data-r="12" class="active">12M</button><button data-r="0">All</button></div>
             <div class="seg" id="mType"><button data-t="line" class="active">Area</button><button data-t="bar">Bars</button></div>
+            <button class="fx-expand" id="mZoom" type="button" title="Expand chart">${icon('maximize')}</button>
           </div>
         </div>
         <div class="card-pad">
@@ -53,7 +55,8 @@ export default async function dashboard(view, ctx) {
       </div>
     </div>
 
-    <div class="grid cols-3 mb16">
+    </div>
+    <div data-widget="breakdown"><div class="grid cols-3">
       <div class="card"><div class="card-head"><h3>Spend by category</h3><a href="#/expenses">Details</a></div>
         <div class="card-pad">${barList(d.charts.expenseByCategory, 'category')}</div></div>
       <div class="card"><div class="card-head"><h3>Spend by team member</h3></div>
@@ -67,18 +70,22 @@ export default async function dashboard(view, ctx) {
         </div></div>
     </div>
 
-    <div class="card mb16"><div class="card-head"><h3>Quick actions</h3></div>
+    </div>
+    <div data-widget="quick"><div class="card"><div class="card-head"><h3>Quick actions</h3></div>
       <div class="card-pad quick-grid">
         ${[['invoices', 'invoice', 'Invoices'], ['leads', 'leads', 'Leads'], ['deals', 'target', 'Deals pipeline'], ['financials', 'report', 'Financial reports']]
           .map(([h, i, l]) => `<a href="#/${h}">${icon(i)}<span>${l}</span></a>`).join('')}
-      </div></div>
+      </div></div></div>
 
-    <div class="grid cols-2">
+    <div data-widget="recent"><div class="grid cols-2">
       <div class="card"><div class="card-head"><h3>Recent meetings</h3><a href="#/meetings">View all</a></div>
         <div id="recMeet"></div></div>
       <div class="card"><div class="card-head"><h3>Recent expenses</h3><a href="#/expenses">View all</a></div>
         <div id="recExp"></div></div>
-    </div>`;
+    </div></div></div>`;
+
+  sortable(view.querySelector('#dashW'), 'devx-dash-layout');
+  if (!ctx.soft) typewrite(view.querySelector('.page-head h1'));
 
   view.querySelector('#qMeet').onclick = () => ctx.navigate('meetings');
   view.querySelector('#qExp').onclick = () => ctx.navigate('expenses');
@@ -102,6 +109,9 @@ export default async function dashboard(view, ctx) {
     makeChart('dMonth', type, {
       labels: rows.map((r) => new Date(r.ym + '-01').toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })),
       datasets: [{ label: 'AED', data: rows.map((r) => r.total) }],
+    }, {
+      onClick: (_e, els) => { if (els.length) ctx.navigate('expenses'); },
+      onHover: (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
     });
   };
   const seg = (id, fn) => view.querySelector(id).addEventListener('click', (e) => {
@@ -109,6 +119,22 @@ export default async function dashboard(view, ctx) {
     view.querySelectorAll(`${id} button`).forEach((x) => x.classList.toggle('active', x === b));
     fn(b); drawMonth();
   });
+  view.querySelector('#mZoom').onclick = () => {
+    const rows = range ? em.slice(-range) : em;
+    const back = document.createElement('div');
+    back.className = 'fx-zoom-back';
+    back.innerHTML = `<div class="fx-zoom"><div class="card-head"><h3>Monthly expenses</h3><button class="btn btn-ghost btn-icon" type="button" data-x>${icon('x')}</button></div>
+      <div class="card-pad" style="flex:1;display:flex"><div class="chart-box" style="flex:1"><canvas id="dMonthZoom"></canvas></div></div></div>`;
+    document.body.appendChild(back);
+    const close = () => { back.remove(); removeEventListener('keydown', esc); };
+    const esc = (e) => { if (e.key === 'Escape') close(); };
+    addEventListener('keydown', esc);
+    back.addEventListener('mousedown', (e) => { if (e.target === back || e.target.closest('[data-x]')) close(); });
+    makeChart('dMonthZoom', type, {
+      labels: rows.map((r) => new Date(r.ym + '-01').toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })),
+      datasets: [{ label: 'AED', data: rows.map((r) => r.total) }],
+    });
+  };
   seg('#mRange', (b) => { range = Number(b.dataset.r); });
   seg('#mType', (b) => { type = b.dataset.t; });
   drawMonth();
@@ -123,7 +149,9 @@ export default async function dashboard(view, ctx) {
   };
   makeChart('dStatus', 'doughnut', { labels: ms.map((r) => r.status), datasets: [{ data: ms.map((r) => r.n) }] }, {
     plugins: { legend: { display: false } },
-    onHover: (_e, els) => {
+    onClick: (_e, els) => { if (els.length) ctx.navigate('meetings'); },
+    onHover: (e, els) => {
+      e.native.target.style.cursor = els.length ? 'pointer' : 'default';
       if (els.length) { const i = els[0].index; totEl.textContent = ms[i].n; lblEl.textContent = ms[i].status; }
       else resetCenter();
     },
